@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Baby-Monitor">
+  <defs>
+    <linearGradient id="screen" x1="141" y1="132" x2="371" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a8e4c4"/>
+      <stop offset="1" stop-color="#5f9f7c"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="156" y1="118" x2="356" y2="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".24"/>
+      <stop offset=".52" stop-color="#ffffff" stop-opacity=".04"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#020706" flood-opacity=".38"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#101615"/>
+  <g filter="url(#shadow)">
+    <rect x="108" y="126" width="296" height="218" rx="42" fill="#18211f" stroke="#31433d" stroke-width="12"/>
+    <rect x="136" y="154" width="240" height="162" rx="26" fill="url(#screen)"/>
+    <path d="M152 172c42-20 117-22 207 1" fill="none" stroke="url(#glass)" stroke-width="22" stroke-linecap="round"/>
+    <path d="M167 241h48l21-38 36 83 25-51h48" fill="none" stroke="#eef6f2" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="184" cy="205" r="9" fill="#eef6f2"/>
+    <circle cx="328" cy="205" r="9" fill="#eef6f2"/>
+    <path d="M226 344h60v34h-60z" fill="#18211f" stroke="#31433d" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M192 388h128" stroke="#31433d" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>
