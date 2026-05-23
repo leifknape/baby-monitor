@@ -255,7 +255,6 @@ function renderDashboard() {
   const stool = diapers.filter((entry) => entry.data?.stool);
   const latestFeeding = latest(state.entries.filter((entry) => entry.type === "feeding"));
   const latestWeight = latest(measurements("weight"));
-  const latestMeasurements = latestMeasurementSummary();
   const latestObservation = latest(state.entries.filter((entry) => entry.type === "observation"));
   const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
   const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
@@ -270,7 +269,7 @@ function renderDashboard() {
   if (wet.length) cards.push(statCard("Nasse Windeln heute", String(wet.length), latestTimeSub(wet), "diaper"));
   if (stool.length) cards.push(statCard("Stuhlwindeln heute", String(stool.length), latestTimeSub(stool), "diaper"));
   if (latestWeight) cards.push(statCard("Letztes Gewicht", formatValue(latestWeight), dateTimeText(latestWeight.timestamp), "scale"));
-  if (latestMeasurements) cards.push(statCard("Letzte Messwerte", latestMeasurements.value, latestMeasurements.sub, "ruler"));
+  dashboardMeasurementCards().forEach((card) => cards.push(card));
   if (latestObservation) cards.push(statCard("Letzte Beobachtung", firstLine(latestObservation.notes || categoriesText(latestObservation)), dateTimeText(latestObservation.timestamp), "eye"));
   if (latestFinding) cards.push(statCard("Letzter Arztbefund", firstLine(latestFinding.data?.assessment || latestFinding.notes || latestFinding.data?.findingType || "Dokumentiert"), dateTimeText(latestFinding.timestamp), "stethoscope"));
 
@@ -286,6 +285,21 @@ function renderDashboard() {
       </div>
     </section>
   `;
+}
+
+function dashboardMeasurementCards() {
+  return [
+    ["length", "Letzte Körperlänge", "ruler"],
+    ["head", "Letzter Kopfumfang", "circle"],
+    ["temperature", "Letzte Temperatur", "thermometer"],
+    ["spo2", "Letzte SpO₂", "drop"],
+    ["heart_rate", "Letzte Herzfrequenz", "heart"],
+    ["respiratory_rate", "Letzte Atemfrequenz", "lungs"],
+  ].map(([kind, label, iconName]) => {
+    const entry = latest(measurements(kind));
+    if (!entry) return "";
+    return statCard(label, formatValue(entry), dateTimeText(entry.timestamp), iconName);
+  }).filter(Boolean);
 }
 
 function renderEmptyDashboard() {
@@ -458,6 +472,7 @@ function renderSettings() {
         <h3>Einstellungen</h3>
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
+        <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
       </div>
       <div class="settings-card">
@@ -483,12 +498,14 @@ function renderSettings() {
 function renderBottomNav() {
   return `
     <nav class="bottom-nav" aria-label="Hauptnavigation">
-      ${navItems.map((item) => `
-        ${item.id === "spacer" ? `<div class="nav-spacer" aria-hidden="true"></div>` : `<button class="nav-button ${view === item.id ? "active" : ""}" type="button" data-nav="${item.id}">
-          ${icon(item.icon)}
-          <span>${item.label}</span>
-        </button>`}
-      `).join("")}
+      <div class="bottom-nav-inner">
+        ${navItems.map((item) => `
+          ${item.id === "spacer" ? `<div class="nav-spacer" aria-hidden="true"></div>` : `<button class="nav-button ${view === item.id ? "active" : ""}" type="button" data-nav="${item.id}">
+            ${icon(item.icon)}
+            <span>${item.label}</span>
+          </button>`}
+        `).join("")}
+      </div>
     </nav>
   `;
 }
@@ -759,6 +776,7 @@ function bindEvents() {
   const actions = {
     "save-child": saveChild,
     "save-settings": saveSettings,
+    "refresh-app": refreshApp,
     "load-demo": loadDemoData,
     "remove-demo": removeDemoData,
     "export-long": exportLongCsv,
@@ -909,6 +927,14 @@ function saveSettings() {
   state.settings.explicitThemeChoice = true;
   saveState();
   render();
+}
+
+async function refreshApp() {
+  if ("serviceWorker" in navigator) {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration) await registration.update();
+  }
+  window.location.reload();
 }
 
 function loadDemoData() {
@@ -1151,12 +1177,28 @@ function formatValue(entry) {
 
 function childAgeText(dateString) {
   const birth = new Date(dateString);
+  if (Number.isNaN(birth.getTime())) return "";
   const now = new Date();
+  if (birth > now) return "Geburtsdatum liegt in der Zukunft";
+  const totalDays = Math.floor((startOfDay(now) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
   let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
   if (now.getDate() < birth.getDate()) months -= 1;
-  const weeks = Math.max(0, Math.floor((now - new Date(now.getFullYear(), now.getMonth() - months, birth.getDate())) / (7 * 24 * 60 * 60 * 1000)));
-  if (months <= 0) return `${Math.max(0, weeks)} Wochen`;
-  return `${months} Monate, ${weeks} Wochen`;
+  months = Math.max(0, months);
+  const monthAnchor = addMonthsClamped(birth, months);
+  const remainingDays = Math.max(0, Math.floor((startOfDay(now) - startOfDay(monthAnchor)) / (24 * 60 * 60 * 1000)));
+  const remainingWeeks = Math.floor(remainingDays / 7);
+  if (months === 0) return `${Math.floor(totalDays / 7)} Wochen`;
+  return remainingWeeks ? `${months} Monate, ${remainingWeeks} Wochen` : `${months} Monate`;
+}
+
+function addMonthsClamped(date, months) {
+  const target = new Date(date);
+  const originalDay = target.getDate();
+  target.setDate(1);
+  target.setMonth(target.getMonth() + months);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(originalDay, lastDay));
+  return target;
 }
 
 function latestTimeSub(entries) {
