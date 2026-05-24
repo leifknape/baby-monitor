@@ -52,6 +52,7 @@ function defaultState() {
     settings: {
       defaultMilk: "Pre",
       darkMode: true,
+      growthReferenceSource: "who",
       growthReferenceSex: "none",
       demoVersion: DEMO_VERSION,
     },
@@ -472,7 +473,8 @@ function renderSettings() {
       <div class="settings-card">
         <h3>Einstellungen</h3>
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
-        ${selectField("growth-reference-sex", "WHO-Perzentilen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
+        ${selectField("growth-reference-source", "Referenzkurven", [["who", "WHO"], ["german", "U-Heft / deutsche Referenzkurven"]], state.settings.growthReferenceSource || "who")}
+        ${selectField("growth-reference-sex", "Perzentilen anzeigen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
         <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
@@ -944,6 +946,7 @@ function saveChild() {
 
 function saveSettings() {
   state.settings.defaultMilk = document.getElementById("default-milk").value.trim() || "Pre";
+  state.settings.growthReferenceSource = document.getElementById("growth-reference-source").value;
   state.settings.growthReferenceSex = document.getElementById("growth-reference-sex").value;
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
@@ -1254,7 +1257,7 @@ function lineChart(title, entries, unit, options = {}) {
     }).join(" "),
   }));
   const latestPercentile = percentileForEntry(entries.at(-1), options.referenceKind);
-  const latestLabel = [formatValue(entries.at(-1)), latestPercentile ? `WHO ${latestPercentile}` : ""].filter(Boolean).join(" · ");
+  const latestLabel = [formatValue(entries.at(-1)), latestPercentile ? `${referenceShortLabel()} ${latestPercentile}` : ""].filter(Boolean).join(" · ");
   return `
     <div class="chart-title"><span>${title}</span><span>${escapeHtml(latestLabel)}</span></div>
     <div class="chart-frame">
@@ -1284,8 +1287,7 @@ function chartPointValue(entry, unit) {
 }
 
 function referenceSeries(kind, minTime, maxTime) {
-  const sex = state.settings.growthReferenceSex;
-  const data = window.WHO_GROWTH?.[sex]?.[kind];
+  const { sex, data } = growthReferenceData(kind);
   if (!data || sex === "none" || !["weight", "head", "length"].includes(kind)) return [];
   const count = 18;
   const keys = [
@@ -1299,17 +1301,17 @@ function referenceSeries(kind, minTime, maxTime) {
     points: Array.from({ length: count }, (_, index) => {
       const time = minTime + ((maxTime - minTime || 1) * index) / (count - 1);
       const ageMonths = ageMonthsAt(new Date(time));
-      return { time, value: whoValueAt(data, ageMonths, key) };
-    }),
-  }));
+      const value = growthValueAt(data, ageMonths, key);
+      return value === null ? null : { time, value };
+    }).filter(Boolean),
+  })).filter((line) => line.points.length > 1);
 }
 
 function percentileForEntry(entry, kind) {
-  const sex = state.settings.growthReferenceSex;
-  const data = window.WHO_GROWTH?.[sex]?.[kind];
+  const { sex, data } = growthReferenceData(kind);
   if (!entry || !data || sex === "none" || !["weight", "head", "length"].includes(kind)) return "";
   const ageMonths = ageMonthsAt(new Date(entry.timestamp));
-  const lms = whoLmsAt(data, ageMonths);
+  const lms = growthLmsAt(data, ageMonths);
   if (!lms) return "";
   const value = Number(entry.value);
   const z = lms.l === 0 ? Math.log(value / lms.median) / lms.s : ((value / lms.median) ** lms.l - 1) / (lms.l * lms.s);
@@ -1317,7 +1319,22 @@ function percentileForEntry(entry, kind) {
   return `P${Math.round(percentile)}`;
 }
 
-function whoValueAt(data, ageMonths, key) {
+function growthReferenceData(kind) {
+  const sex = state.settings.growthReferenceSex;
+  const source = state.settings.growthReferenceSource || "who";
+  const datasets = {
+    who: window.WHO_GROWTH,
+    german: window.GERMAN_GROWTH,
+  };
+  return { sex, source, data: datasets[source]?.[sex]?.[kind] };
+}
+
+function referenceShortLabel() {
+  return state.settings.growthReferenceSource === "german" ? "U-Heft" : "WHO";
+}
+
+function growthValueAt(data, ageMonths, key) {
+  if (!data.length || ageMonths < data[0].m || ageMonths > data.at(-1).m) return null;
   const lower = data.reduce((best, row) => row.m <= ageMonths ? row : best, data[0]);
   const upper = data.find((row) => row.m >= ageMonths) || data.at(-1);
   if (upper.m === lower.m) return lower[key];
@@ -1325,11 +1342,12 @@ function whoValueAt(data, ageMonths, key) {
   return lower[key] + (upper[key] - lower[key]) * ratio;
 }
 
-function whoLmsAt(data, ageMonths) {
+function growthLmsAt(data, ageMonths) {
+  if (!data.length || ageMonths < data[0].m || ageMonths > data.at(-1).m) return null;
   return {
-    l: whoValueAt(data, ageMonths, "l"),
-    median: whoValueAt(data, ageMonths, "median"),
-    s: whoValueAt(data, ageMonths, "s"),
+    l: growthValueAt(data, ageMonths, "l"),
+    median: growthValueAt(data, ageMonths, "median"),
+    s: growthValueAt(data, ageMonths, "s"),
   };
 }
 

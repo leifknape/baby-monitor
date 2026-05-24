@@ -24,6 +24,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/german-data.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/styles.css"
   [headers.values]
     Cache-Control = "no-cache"
