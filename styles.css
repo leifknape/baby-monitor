@@ -723,6 +723,27 @@ button {
   gap: 8px;
 }
 
+.file-import {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--button);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--soft-shadow);
+}
+
+.file-import input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .danger-button {
   border: 1px solid var(--coral);
   background: var(--coral-soft);

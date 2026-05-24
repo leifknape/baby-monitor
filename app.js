@@ -493,6 +493,14 @@ function renderSettings() {
           <button class="text-button" type="button" data-action="export-separate">Separate CSVs exportieren</button>
         </div>
       </div>
+      <div class="settings-card">
+        <h3>CSV-Import</h3>
+        <p class="detail-stack">CSV-Dateien werden nur lokal eingelesen. Vorhandene Einträge mit gleicher ID werden aktualisiert, neue Einträge ergänzt.</p>
+        <label class="file-import">
+          <input id="csv-import" type="file" accept=".csv,text/csv" multiple />
+          <span>CSV-Datei auswählen</span>
+        </label>
+      </div>
     </section>
   `;
 }
@@ -801,6 +809,13 @@ function bindEvents() {
       render();
     });
   }
+  const csvImport = document.getElementById("csv-import");
+  if (csvImport) {
+    csvImport.addEventListener("change", async () => {
+      await importCsvFiles([...csvImport.files]);
+      csvImport.value = "";
+    });
+  }
 }
 
 function openChoice() {
@@ -1000,6 +1015,108 @@ function downloadCsv(filename, content) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+async function importCsvFiles(files) {
+  if (!files.length) return;
+  try {
+    const imports = [];
+    for (const file of files) {
+      const text = await file.text();
+      imports.push(...entriesFromCsv(text));
+    }
+    if (!imports.length) {
+      alert("Keine passenden Einträge in der CSV-Datei gefunden.");
+      return;
+    }
+    const byId = new Map(state.entries.map((entry) => [entry.id, entry]));
+    imports.forEach((entry) => byId.set(entry.id, entry));
+    state.entries = [...byId.values()].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    saveState();
+    render();
+    alert(`${imports.length} Einträge importiert.`);
+  } catch (error) {
+    alert(`CSV-Import nicht möglich: ${error.message}`);
+  }
+}
+
+function entriesFromCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((header) => header.trim().replace(/^\uFEFF/, ""));
+  return rows.slice(1)
+    .map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ""])))
+    .map(normalizeImportedEntry)
+    .filter(Boolean);
+}
+
+function normalizeImportedEntry(row) {
+  const allowedTypes = new Set(["feeding", "diaper", "measurement", "observation", "medication", "medical_finding", "appointment", "note"]);
+  const type = row.type?.trim();
+  const timestamp = row.timestamp?.trim();
+  if (!allowedTypes.has(type) || !timestamp || Number.isNaN(new Date(timestamp).getTime())) return null;
+
+  let data = {};
+  if (row.data?.trim()) {
+    data = JSON.parse(row.data);
+    if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
+  }
+
+  const value = row.value === "" || row.value === undefined ? undefined : Number(row.value);
+  const createdAt = row.createdAt?.trim() || new Date().toISOString();
+  const updatedAt = row.updatedAt?.trim() || createdAt;
+  const entry = {
+    id: row.id?.trim() || crypto.randomUUID(),
+    childId: row.childId?.trim() || state.child.id,
+    type,
+    timestamp: new Date(timestamp).toISOString(),
+    createdAt: Number.isNaN(new Date(createdAt).getTime()) ? new Date().toISOString() : new Date(createdAt).toISOString(),
+    updatedAt: Number.isNaN(new Date(updatedAt).getTime()) ? new Date().toISOString() : new Date(updatedAt).toISOString(),
+    data,
+  };
+  if (value !== undefined && !Number.isNaN(value)) entry.value = value;
+  if (row.unit?.trim()) entry.unit = row.unit.trim();
+  if (row.notes?.trim()) entry.notes = row.notes.trim();
+  return entry;
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      cell += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      if (row.some((item) => item !== "")) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    cell += char;
+  }
+
+  row.push(cell);
+  if (row.some((item) => item !== "")) rows.push(row);
+  return rows;
 }
 
 function filteredTimelineEntries() {
