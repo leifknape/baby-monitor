@@ -19,6 +19,11 @@
     Cache-Control = "no-cache"
 
 [[headers]]
+  for = "/who-data.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
   for = "/styles.css"
   [headers.values]
     Cache-Control = "no-cache"

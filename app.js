@@ -52,6 +52,7 @@ function defaultState() {
     settings: {
       defaultMilk: "Pre",
       darkMode: true,
+      growthReferenceSex: "none",
       demoVersion: DEMO_VERSION,
     },
   };
@@ -405,7 +406,7 @@ function renderGrowthCharts() {
   const charts = kinds.map(([kind, title, unit]) => {
     const values = measurements(kind);
     if (values.length < 2) return "";
-    return lineChart(title, values, unit, { showPointLabels: true, showTimeAxis: true });
+    return lineChart(title, values, unit, { showPointLabels: true, showTimeAxis: true, referenceKind: kind });
   }).filter(Boolean);
   const latestWeight = latest(measurements("weight"));
   const priorWeight = measurements("weight").slice(-2)[0];
@@ -471,6 +472,7 @@ function renderSettings() {
       <div class="settings-card">
         <h3>Einstellungen</h3>
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
+        ${selectField("growth-reference-sex", "WHO-Perzentilen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
         <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
@@ -680,7 +682,11 @@ function selectField(name, label, options, selected) {
     <div class="field">
       <label for="${name}">${label}</label>
       <select id="${name}" name="${name}">
-        ${options.map((option) => `<option value="${escapeAttr(option)}" ${selected === option ? "selected" : ""}>${option || "Optional"}</option>`).join("")}
+        ${options.map((option) => {
+          const value = Array.isArray(option) ? option[0] : option;
+          const text = Array.isArray(option) ? option[1] : (option || "Optional");
+          return `<option value="${escapeAttr(value)}" ${selected === value ? "selected" : ""}>${escapeHtml(text)}</option>`;
+        }).join("")}
       </select>
     </div>
   `;
@@ -923,6 +929,7 @@ function saveChild() {
 
 function saveSettings() {
   state.settings.defaultMilk = document.getElementById("default-milk").value.trim() || "Pre";
+  state.settings.growthReferenceSex = document.getElementById("growth-reference-sex").value;
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
   saveState();
@@ -1096,29 +1103,48 @@ function barChart(items, unit) {
 function lineChart(title, entries, unit, options = {}) {
   if (entries.length < 2) return `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`;
   const values = entries.map((entry) => Number(entry.value));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
   const times = entries.map((entry) => new Date(entry.timestamp).getTime());
   const minTime = Math.min(...times);
   const maxTime = Math.max(...times);
   const timeRange = maxTime - minTime || 1;
+  const references = referenceSeries(options.referenceKind, minTime, maxTime);
+  const referenceValues = references.flatMap((line) => line.points.map((point) => point.value));
+  const min = Math.min(...values, ...referenceValues);
+  const max = Math.max(...values, ...referenceValues);
+  const padding = (max - min) * 0.12 || 1;
+  const yMin = min - padding;
+  const yMax = max + padding;
+  const range = yMax - yMin || 1;
   const width = 420;
   const xStart = 12;
   const xEnd = width - 12;
+  const xForTime = (timestamp, index = 0) => entries.length > 2 || timeRange > 1
+    ? xStart + ((timestamp - minTime) / timeRange) * (xEnd - xStart)
+    : xStart + (index / (entries.length - 1)) * (xEnd - xStart);
+  const yForValue = (value) => 126 - ((value - yMin) / range) * 86;
   const points = entries.map((entry, index) => {
-    const x = entries.length > 2
-      ? xStart + ((new Date(entry.timestamp).getTime() - minTime) / timeRange) * (xEnd - xStart)
-      : xStart + (index / (entries.length - 1)) * (xEnd - xStart);
-    const y = 126 - ((Number(entry.value) - min) / range) * 86;
+    const x = xForTime(new Date(entry.timestamp).getTime(), index);
+    const y = yForValue(Number(entry.value));
     return [x, y, entry, index];
   });
   const path = points.map(([x, y], index) => `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const referencePaths = references.map((line) => ({
+    ...line,
+    path: line.points.map((point, index) => {
+      const x = xForTime(point.time);
+      const y = yForValue(point.value);
+      return `${index ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    }).join(" "),
+  }));
+  const latestPercentile = percentileForEntry(entries.at(-1), options.referenceKind);
+  const latestLabel = [formatValue(entries.at(-1)), latestPercentile ? `WHO ${latestPercentile}` : ""].filter(Boolean).join(" · ");
   return `
-    <div class="chart-title"><span>${title}</span><span>${formatValue(entries.at(-1))}</span></div>
+    <div class="chart-title"><span>${title}</span><span>${escapeHtml(latestLabel)}</span></div>
     <div class="chart-frame">
       <svg class="line-chart" viewBox="0 0 ${width} 180" role="img" aria-label="${title}">
         <line class="axis-line" x1="${xStart}" y1="140" x2="${xEnd}" y2="140"></line>
+        ${referencePaths.map((line) => `<path class="reference-line ${line.key === "p50" ? "median" : ""}" d="${line.path}"></path>`).join("")}
+        ${referencePaths.map((line) => `<text class="reference-label" x="${(xEnd - 2).toFixed(1)}" y="${yForValue(line.points.at(-1).value).toFixed(1)}" text-anchor="end">${line.label}</text>`).join("")}
         <path d="${path}"></path>
         ${points.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4"></circle>`).join("")}
         ${options.showPointLabels ? points.map(([x, y, entry, index]) => `<text class="point-label" x="${x.toFixed(1)}" y="${Math.max(16, y - 10).toFixed(1)}" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(chartPointValue(entry, unit))}</text>`).join("") : ""}
@@ -1138,6 +1164,69 @@ function edgeAnchor(index, count) {
 function chartPointValue(entry, unit) {
   if (entry.data?.kind === "weight") return `${Math.round(Number(entry.value))} g`;
   return `${Number(entry.value).toLocaleString("de-DE", { maximumFractionDigits: 1 })}${unit}`;
+}
+
+function referenceSeries(kind, minTime, maxTime) {
+  const sex = state.settings.growthReferenceSex;
+  const data = window.WHO_GROWTH?.[sex]?.[kind];
+  if (!data || sex === "none" || !["weight", "head", "length"].includes(kind)) return [];
+  const count = 18;
+  const keys = [
+    ["p5", "P5"],
+    ["p50", "P50"],
+    ["p95", "P95"],
+  ];
+  return keys.map(([key, label]) => ({
+    key,
+    label,
+    points: Array.from({ length: count }, (_, index) => {
+      const time = minTime + ((maxTime - minTime || 1) * index) / (count - 1);
+      const ageMonths = ageMonthsAt(new Date(time));
+      return { time, value: whoValueAt(data, ageMonths, key) };
+    }),
+  }));
+}
+
+function percentileForEntry(entry, kind) {
+  const sex = state.settings.growthReferenceSex;
+  const data = window.WHO_GROWTH?.[sex]?.[kind];
+  if (!entry || !data || sex === "none" || !["weight", "head", "length"].includes(kind)) return "";
+  const ageMonths = ageMonthsAt(new Date(entry.timestamp));
+  const lms = whoLmsAt(data, ageMonths);
+  if (!lms) return "";
+  const value = Number(entry.value);
+  const z = lms.l === 0 ? Math.log(value / lms.median) / lms.s : ((value / lms.median) ** lms.l - 1) / (lms.l * lms.s);
+  const percentile = Math.max(0, Math.min(100, normalCdf(z) * 100));
+  return `P${Math.round(percentile)}`;
+}
+
+function whoValueAt(data, ageMonths, key) {
+  const lower = data.reduce((best, row) => row.m <= ageMonths ? row : best, data[0]);
+  const upper = data.find((row) => row.m >= ageMonths) || data.at(-1);
+  if (upper.m === lower.m) return lower[key];
+  const ratio = (ageMonths - lower.m) / (upper.m - lower.m);
+  return lower[key] + (upper[key] - lower[key]) * ratio;
+}
+
+function whoLmsAt(data, ageMonths) {
+  return {
+    l: whoValueAt(data, ageMonths, "l"),
+    median: whoValueAt(data, ageMonths, "median"),
+    s: whoValueAt(data, ageMonths, "s"),
+  };
+}
+
+function ageMonthsAt(date) {
+  const birth = new Date(state.child.birthDate);
+  const days = Math.max(0, (startOfDay(date) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
+  return Math.max(0, Math.min(24, days / 30.4375));
+}
+
+function normalCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  const probability = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - probability : probability;
 }
 
 function entryTitle(entry) {

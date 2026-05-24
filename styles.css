@@ -670,6 +670,18 @@ button {
   stroke-linejoin: round;
 }
 
+.line-chart .reference-line {
+  stroke: color-mix(in srgb, var(--muted) 46%, transparent);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 7;
+}
+
+.line-chart .reference-line.median {
+  stroke: color-mix(in srgb, var(--muted) 64%, transparent);
+  stroke-width: 1.8;
+  stroke-dasharray: none;
+}
+
 .line-chart circle {
   fill: var(--surface);
   stroke: var(--accent);
@@ -688,10 +700,15 @@ button {
 }
 
 .axis-label,
-.unit-label {
+.unit-label,
+.reference-label {
   fill: var(--muted);
   font-size: 10px;
   font-weight: 700;
+}
+
+.reference-label {
+  opacity: 0.78;
 }
 
 .settings-card {
