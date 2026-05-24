@@ -433,9 +433,8 @@ function renderFeedingCharts() {
 function renderDiaperCharts() {
   const diapers = state.entries.filter((entry) => entry.type === "diaper");
   if (!diapers.length) return "";
-  const wet = dailyCounts(diapers.filter((entry) => entry.data?.wet), (items) => items.length);
-  const stool = dailyCounts(diapers.filter((entry) => entry.data?.stool), (items) => items.length);
-  return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>Nass und Stuhl pro Tag</span></div>${barChart(mergeSeries(wet, stool), "")}</article>`;
+  const byDay = dailyCounts(diapers, (items) => items.length);
+  return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>Einträge pro Tag</span></div>${barChart(byDay, "")}</article>`;
 }
 
 function renderObservationCharts() {
@@ -1199,13 +1198,6 @@ function countBy(entries, getKey) {
     groups.set(key, (groups.get(key) || 0) + 1);
   });
   return [...groups.entries()].map(([label, value]) => ({ label, value }));
-}
-
-function mergeSeries(left, right) {
-  const map = new Map();
-  left.forEach((item) => map.set(item.label, item.value));
-  right.forEach((item) => map.set(item.label, (map.get(item.label) || 0) + item.value));
-  return [...map.entries()].map(([label, value]) => ({ label, value })).slice(-7);
 }
 
 function barChart(items, unit) {
