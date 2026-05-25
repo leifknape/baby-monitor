@@ -102,6 +102,14 @@ let customRange = {
   to: new Date().toISOString().slice(0, 10),
 };
 let monthlySelection = new Date().toISOString().slice(0, 7);
+let doctorExportRange = {
+  from: (() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date.toISOString().slice(0, 10);
+  })(),
+  to: new Date().toISOString().slice(0, 10),
+};
 
 function initialViewFromHash() {
   const hash = location.hash.replace("#", "");
@@ -844,6 +852,15 @@ function renderSettings() {
         </div>
       </div>
       <div class="settings-card">
+        <h3>Export für Ärztinnen/Ärzte</h3>
+        <p class="detail-stack">Erstellt eine kompakte Zusammenfassung für den gewählten Zeitraum als lokale Markdown-Datei. Es wird nichts hochgeladen.</p>
+        <div class="custom-range">
+          <div class="field"><label for="doctor-from">Von</label><input id="doctor-from" type="date" value="${doctorExportRange.from}" /></div>
+          <div class="field"><label for="doctor-to">Bis</label><input id="doctor-to" type="date" value="${doctorExportRange.to}" /></div>
+        </div>
+        <button class="text-button full" type="button" data-action="export-doctor-summary">Zusammenfassung exportieren</button>
+      </div>
+      <div class="settings-card">
         <h3>CSV-Import</h3>
         <p class="detail-stack">CSV-Dateien werden nur lokal eingelesen. Vorhandene Einträge mit gleicher ID werden aktualisiert, neue Einträge ergänzt.</p>
         <label class="file-import">
@@ -1214,6 +1231,7 @@ function bindEvents() {
     "toggle-uheft-exam": toggleUHeftExam,
     "export-long": exportLongCsv,
     "export-separate": exportSeparateCsvs,
+    "export-doctor-summary": exportDoctorSummary,
   };
   document.querySelectorAll("[data-action]").forEach((element) => {
     const fn = actions[element.dataset.action];
@@ -1515,6 +1533,70 @@ function exportSeparateCsvs() {
   Object.entries(groups).forEach(([filename, predicate]) => downloadCsv(filename, toCsv(state.entries.filter(predicate), headers)));
 }
 
+function exportDoctorSummary() {
+  doctorExportRange.from = document.getElementById("doctor-from")?.value || doctorExportRange.from;
+  doctorExportRange.to = document.getElementById("doctor-to")?.value || doctorExportRange.to;
+  const start = startOfDay(new Date(doctorExportRange.from));
+  const end = startOfDay(new Date(doctorExportRange.to));
+  end.setDate(end.getDate() + 1);
+  const entries = state.entries
+    .filter((entry) => {
+      const timestamp = new Date(entry.timestamp);
+      return timestamp >= start && timestamp < end;
+    })
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const lines = doctorSummaryLines(entries, doctorExportRange.from, doctorExportRange.to);
+  downloadText(`arzt-zusammenfassung-${doctorExportRange.from}-bis-${doctorExportRange.to}.md`, lines.join("\n"));
+}
+
+function doctorSummaryLines(entries, from, to) {
+  const feedings = entries.filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
+  const diapers = entries.filter((entry) => entry.type === "diaper");
+  const milestones = entries.filter((entry) => entry.type === "milestone");
+  const observations = entries.filter((entry) => entry.type === "observation");
+  const medications = entries.filter((entry) => entry.type === "medication");
+  const findings = entries.filter((entry) => entry.type === "medical_finding");
+  const measurementLines = ["weight", "head", "length", "temperature", "spo2", "heart_rate"]
+    .map((kind) => entries.filter((entry) => entry.type === "measurement" && entry.data?.kind === kind))
+    .filter((items) => items.length)
+    .flatMap((items) => items.slice(-5).map((entry) => `- ${dateTimeText(entry.timestamp)}: ${entryTitle(entry)} ${formatValue(entry)}`));
+  const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
+  return [
+    `# Baby-Monitor Zusammenfassung`,
+    ``,
+    `Kind: ${state.child.name}`,
+    `Geburtsdatum: ${state.child.birthDate}`,
+    correctedAgeActive() ? `Alter: ${childAgeText()}` : `Alter: ${childAgeText()}`,
+    `Zeitraum: ${from} bis ${to}`,
+    ``,
+    `## Überblick`,
+    `- Einträge insgesamt: ${entries.length}`,
+    feedings.length ? `- Trinken: ${feedings.length} Einträge, ${totalMl} ml insgesamt` : `- Trinken: keine Einträge`,
+    diapers.length ? `- Windeln: ${diapers.length} Einträge, ${diapers.filter((entry) => entry.data?.wet).length} nass, ${diapers.filter((entry) => entry.data?.stool).length} Stuhl` : `- Windeln: keine Einträge`,
+    ``,
+    `## Wachstums- und Messwerte`,
+    ...(measurementLines.length ? measurementLines : [`- Keine Messwerte im Zeitraum.`]),
+    ``,
+    `## Meilensteine`,
+    ...(milestones.length ? milestones.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`) : [`- Keine Meilensteine im Zeitraum.`]),
+    ``,
+    `## Beobachtungen`,
+    ...(observations.length ? observations.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}${entry.notes ? ` (${entry.notes})` : ""}`) : [`- Keine Beobachtungen im Zeitraum.`]),
+    ``,
+    `## Medikamente`,
+    ...(medications.length ? medications.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`) : [`- Keine Medikamente im Zeitraum.`]),
+    ``,
+    `## Arztbefunde`,
+    ...(findings.length ? findings.flatMap((entry) => [`- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`, ...findingSummary(entry).lines.map((line) => `  - ${line}`)]) : [`- Keine Arztbefunde im Zeitraum.`]),
+    ``,
+    `## Fragen und Antworten aus dem U-Heft`,
+    ...(normalizedUHeftQuestions().length ? normalizedUHeftQuestions().map((item) => `- ${item.question}${item.answer ? `\n  Antwort: ${item.answer}` : ""}`) : [`- Keine offenen Fragen notiert.`]),
+    ``,
+    `Hinweis: Diese Datei ist eine lokale Zusammenfassung dokumentierter Einträge und keine medizinische Bewertung.`,
+    ``,
+  ];
+}
+
 function toCsv(rows, headers) {
   return [
     headers.join(","),
@@ -1527,7 +1609,11 @@ function csvCell(value) {
 }
 
 function downloadCsv(filename, content) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+  downloadText(filename, content, "text/csv;charset=utf-8");
+}
+
+function downloadText(filename, content, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
