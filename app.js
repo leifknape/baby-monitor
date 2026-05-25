@@ -101,6 +101,7 @@ let customRange = {
   from: new Date().toISOString().slice(0, 10),
   to: new Date().toISOString().slice(0, 10),
 };
+let monthlySelection = new Date().toISOString().slice(0, 7);
 
 function initialViewFromHash() {
   const hash = location.hash.replace("#", "");
@@ -456,24 +457,29 @@ function renderEntryRow(entry) {
 }
 
 function renderMonthlyReview() {
-  const now = new Date();
-  const monthEntries = entriesForMonth(now);
+  const selectedMonth = monthDateFromSelection();
+  const monthEntries = entriesForMonth(selectedMonth);
   const feedings = monthEntries.filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
   const diapers = monthEntries.filter((entry) => entry.type === "diaper");
   const milestones = monthEntries.filter((entry) => entry.type === "milestone");
   const observations = monthEntries.filter((entry) => entry.type === "observation");
   const findings = monthEntries.filter((entry) => entry.type === "medical_finding");
   const positives = positiveDevelopmentItems().filter((item) => monthEntries.some((entry) => entry.id === item.entry.id));
-  const monthMeasurements = (kind) => measurements(kind).filter((entry) => isSameMonth(new Date(entry.timestamp), now));
+  const monthMeasurements = (kind) => measurements(kind).filter((entry) => isSameMonth(new Date(entry.timestamp), selectedMonth));
   const growthParts = ["weight", "head", "length"].map((kind) => monthlyGrowthPart(kind, monthMeasurements(kind))).filter(Boolean);
   const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
-  const monthLabel = now.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const monthLabel = selectedMonth.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const monthOptions = monthlyReviewOptions();
 
   return `
     <section>
       <div class="section-head">
         <h2>Monatsrückblick</h2>
         <span>${escapeHtml(monthLabel)}</span>
+      </div>
+      <div class="month-selector">
+        ${selectField("monthly-review-month", "Monat", monthOptions.months, String(selectedMonth.getMonth()))}
+        ${selectField("monthly-review-year", "Jahr", monthOptions.years, String(selectedMonth.getFullYear()))}
       </div>
       <div class="monthly-grid">
         ${monthEntries.length ? `
@@ -1169,6 +1175,16 @@ function bindEvents() {
       render();
     });
   });
+  ["monthly-review-month", "monthly-review-year"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener("change", () => {
+      const monthIndex = Number(document.getElementById("monthly-review-month").value);
+      const year = document.getElementById("monthly-review-year").value;
+      monthlySelection = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      render();
+    });
+  });
   document.querySelectorAll("[data-range]").forEach((range) => {
     const number = document.getElementById(range.dataset.range);
     if (!number) return;
@@ -1665,6 +1681,23 @@ function entriesForDay(date) {
 
 function entriesForMonth(date) {
   return state.entries.filter((entry) => isSameMonth(new Date(entry.timestamp), date));
+}
+
+function monthDateFromSelection() {
+  const [year, month] = monthlySelection.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return new Date();
+  return new Date(year, month - 1, 1);
+}
+
+function monthlyReviewOptions() {
+  const currentYear = new Date().getFullYear();
+  const entryYears = state.entries.map((entry) => new Date(entry.timestamp).getFullYear()).filter(Number.isFinite);
+  const years = [...new Set([currentYear, ...entryYears])].sort((a, b) => b - a).map((year) => [String(year), String(year)]);
+  const months = Array.from({ length: 12 }, (_, index) => [
+    String(index),
+    new Date(2024, index, 1).toLocaleDateString("de-DE", { month: "long" }),
+  ]);
+  return { months, years };
 }
 
 function isSameMonth(date, reference) {
