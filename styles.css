@@ -722,7 +722,7 @@ button {
 }
 
 .uheft-next,
-.uheft-question {
+.uheft-question-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -782,6 +782,11 @@ button {
   background: var(--bg);
 }
 
+.uheft-question {
+  display: grid;
+  gap: 8px;
+}
+
 .uheft-summary strong {
   display: block;
   margin-bottom: 3px;
@@ -796,6 +801,17 @@ button {
   margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.uheft-question textarea {
+  width: 100%;
+  min-height: 76px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px;
 }
 
 .uheft-finding summary,

@@ -125,7 +125,7 @@ function defaultState() {
       darkMode: true,
       growthReferenceSource: "who",
       growthReferenceSex: "none",
-      uHeftQuestions: ["Gibt es etwas, das wir bis zur nächsten U beobachten sollen?"],
+      uHeftQuestions: [{ question: "Gibt es etwas, das wir bis zur nächsten U beobachten sollen?", answer: "" }],
       uHeftExams: {},
       demoVersion: DEMO_VERSION,
     },
@@ -539,10 +539,13 @@ function renderUHeftCompanion() {
         ${renderUHeftSummary(summary)}
         <div class="uheft-questions">
           <div class="uheft-label">Fragen für das Gespräch</div>
-          ${questions.length ? questions.map((question, index) => `
+          ${questions.length ? normalizedUHeftQuestions().map((item, index) => `
             <div class="uheft-question">
-              <span>${escapeHtml(question)}</span>
-              <button class="icon-button compact" type="button" title="Frage entfernen" data-action="remove-uheft-question" data-index="${index}">${icon("close")}</button>
+              <div class="uheft-question-main">
+                <span>${escapeHtml(item.question)}</span>
+                <button class="icon-button compact" type="button" title="Frage entfernen" data-action="remove-uheft-question" data-index="${index}">${icon("close")}</button>
+              </div>
+              <textarea data-uheft-answer="${index}" placeholder="Antwort notieren">${escapeHtml(item.answer || "")}</textarea>
             </div>
           `).join("") : `<div class="empty">Noch keine Fragen notiert.</div>`}
           <div class="uheft-add">
@@ -1111,6 +1114,9 @@ function bindEvents() {
   document.querySelectorAll("[data-uheft-note]").forEach((input) => {
     input.addEventListener("change", () => updateUHeftExam(input.dataset.uheftNote, { notes: input.value.trim() }));
   });
+  document.querySelectorAll("[data-uheft-answer]").forEach((input) => {
+    input.addEventListener("change", () => updateUHeftAnswer(Number(input.dataset.uheftAnswer), input.value));
+  });
 }
 
 function openChoice() {
@@ -1284,16 +1290,21 @@ function addUHeftQuestion() {
   const input = document.getElementById("uheft-question");
   const question = cleanString(input?.value);
   if (!question) return;
-  state.settings.uHeftQuestions = [...(state.settings.uHeftQuestions || []), question];
+  state.settings.uHeftQuestions = [...normalizedUHeftQuestions(), { question, answer: "" }];
   saveState();
   render();
 }
 
 function removeUHeftQuestion(event) {
   const index = Number(event.currentTarget.dataset.index);
-  state.settings.uHeftQuestions = (state.settings.uHeftQuestions || []).filter((_, itemIndex) => itemIndex !== index);
+  state.settings.uHeftQuestions = normalizedUHeftQuestions().filter((_, itemIndex) => itemIndex !== index);
   saveState();
   render();
+}
+
+function updateUHeftAnswer(index, answer) {
+  state.settings.uHeftQuestions = normalizedUHeftQuestions().map((item, itemIndex) => itemIndex === index ? { ...item, answer: answer.trim() } : item);
+  saveState();
 }
 
 function markUHeftDone(event) {
@@ -1610,8 +1621,18 @@ function currentUHeftSummary(examName) {
     milestones: recentMilestones,
     observations: recentObservations,
     finding: latestFinding ? findingSummary(latestFinding) : null,
-    questions: [...(state.settings.uHeftQuestions || [])],
+    questions: normalizedUHeftQuestions(),
   };
+}
+
+function normalizedUHeftQuestions() {
+  return (state.settings.uHeftQuestions || []).map((item) => {
+    if (typeof item === "string") return { question: item, answer: "" };
+    return {
+      question: item?.question || "",
+      answer: item?.answer || "",
+    };
+  }).filter((item) => item.question);
 }
 
 function summaryEntry(entry) {
@@ -1646,7 +1667,7 @@ function renderUHeftSummary(summary) {
       ${summary.milestones?.length ? `<div><strong>Meilensteine</strong>${summary.milestones.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
       ${summary.observations?.length ? `<div><strong>Beobachtungen</strong>${summary.observations.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
       ${summary.finding ? renderFindingSummary(summary.finding) : ""}
-      ${summary.questions?.length ? `<div><strong>Fragen</strong>${summary.questions.map((question) => `<span>${escapeHtml(question)}</span>`).join("")}</div>` : ""}
+      ${summary.questions?.length ? `<div><strong>Fragen</strong>${summary.questions.map((item) => `<span>${escapeHtml(typeof item === "string" ? item : item.question)}${typeof item === "string" || !item.answer ? "" : `<br>Antwort: ${escapeHtml(item.answer)}`}</span>`).join("")}</div>` : ""}
     </div>
   `;
 }
