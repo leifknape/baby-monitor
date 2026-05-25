@@ -69,16 +69,30 @@ const milestoneGroups = [
   },
 ];
 
+const uHeftSchedule = [
+  { name: "U1", window: "direkt nach Geburt", start: 0, end: 1 },
+  { name: "U2", window: "3.-10. Lebenstag", start: 3, end: 10 },
+  { name: "U3", window: "4.-5. Lebenswoche", start: 28, end: 35 },
+  { name: "U4", window: "3.-4. Lebensmonat", start: 91, end: 122 },
+  { name: "U5", window: "6.-7. Lebensmonat", start: 183, end: 213 },
+  { name: "U6", window: "10.-12. Lebensmonat", start: 304, end: 365 },
+  { name: "U7", window: "21.-24. Lebensmonat", start: 640, end: 730 },
+  { name: "U7a", window: "34.-36. Lebensmonat", start: 1035, end: 1095 },
+  { name: "U8", window: "46.-48. Lebensmonat", start: 1400, end: 1460 },
+  { name: "U9", window: "60.-64. Lebensmonat", start: 1826, end: 1948 },
+];
+
 const navItems = [
   { id: "dashboard", label: "Übersicht", icon: "home" },
   { id: "timeline", label: "Timeline", icon: "list" },
   { id: "spacer", label: "", icon: "" },
   { id: "analytics", label: "Verlauf", icon: "chart" },
+  { id: "uheft", label: "U-Heft", icon: "note" },
   { id: "settings", label: "Einstellungen", icon: "settings" },
 ];
 
 const state = loadState();
-let view = location.hash === "#analytics" ? "analytics" : "dashboard";
+let view = initialViewFromHash();
 let activeSheet = location.hash === "#add" ? "choice" : null;
 let editingId = null;
 let timelineFilter = "today";
@@ -86,6 +100,11 @@ let customRange = {
   from: new Date().toISOString().slice(0, 10),
   to: new Date().toISOString().slice(0, 10),
 };
+
+function initialViewFromHash() {
+  const hash = location.hash.replace("#", "");
+  return ["dashboard", "timeline", "analytics", "uheft", "settings"].includes(hash) ? hash : "dashboard";
+}
 
 function defaultState() {
   const childId = crypto.randomUUID();
@@ -107,6 +126,7 @@ function defaultState() {
       growthReferenceSource: "who",
       growthReferenceSex: "none",
       uHeftQuestions: ["Gibt es etwas, das wir bis zur nächsten U beobachten sollen?"],
+      uHeftExams: {},
       demoVersion: DEMO_VERSION,
     },
   };
@@ -294,6 +314,7 @@ function renderTopbar() {
 function renderView() {
   if (view === "timeline") return renderTimeline();
   if (view === "analytics") return renderAnalytics();
+  if (view === "uheft") return renderUHeftView();
   if (view === "settings") return renderSettings();
   return renderDashboard();
 }
@@ -508,6 +529,7 @@ function renderUHeftCompanion() {
   const recentObservations = state.entries.filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince);
   const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
   const questions = state.settings.uHeftQuestions || [];
+  const growthSinceU = growthSinceLastU();
 
   return `
     <article class="chart-card">
@@ -524,11 +546,12 @@ function renderUHeftCompanion() {
           </div>
           <div class="uheft-icon">${icon("note")}</div>
         </div>
+        ${nextExam.name.startsWith("U") && nextExam.window !== "Gelbes Heft" ? `<button class="text-button full" type="button" data-action="mark-uheft-done" data-exam="${escapeAttr(nextExam.name)}">Als durchgeführt markieren</button>` : ""}
         <div class="uheft-summary">
-          ${latestGrowth.length ? `<div><strong>Letzte Wachstumswerte</strong><span>${latestGrowth.map(formatValue).filter(Boolean).join(" · ")}</span></div>` : ""}
-          ${recentMilestones.length ? `<div><strong>Meilensteine</strong><span>${recentMilestones.length} in den letzten 30 Tagen dokumentiert</span></div>` : ""}
-          ${recentObservations.length ? `<div><strong>Beobachtungen</strong><span>${recentObservations.length} in den letzten 30 Tagen dokumentiert</span></div>` : ""}
-          ${latestFinding ? `<div><strong>Letzter Arztbefund</strong><span>${escapeHtml(dateTimeText(latestFinding.timestamp))}</span></div>` : ""}
+          ${latestGrowth.length ? `<div><strong>Letzte Wachstumswerte</strong><span>${latestGrowth.map(formatValue).filter(Boolean).join(" · ")}</span>${growthSinceU ? `<small>${escapeHtml(growthSinceU)}</small>` : ""}</div>` : ""}
+          ${recentMilestones.length ? `<div><strong>Meilensteine</strong>${recentMilestones.slice(0, 4).map((entry) => `<span>${escapeHtml(dateTimeText(entry.timestamp))}: ${escapeHtml(detailForEntry(entry))}</span>`).join("")}</div>` : ""}
+          ${recentObservations.length ? `<div><strong>Beobachtungen</strong>${recentObservations.slice(0, 4).map((entry) => `<span>${escapeHtml(dateTimeText(entry.timestamp))}: ${escapeHtml(detailForEntry(entry))}</span>`).join("")}</div>` : ""}
+          ${latestFinding ? renderFindingDetails(latestFinding) : ""}
         </div>
         <div class="uheft-questions">
           <div class="uheft-label">Fragen für das Gespräch</div>
@@ -543,6 +566,45 @@ function renderUHeftCompanion() {
             <button class="text-button" type="button" data-action="add-uheft-question">Hinzufügen</button>
           </div>
         </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderUHeftView() {
+  const completed = uHeftSchedule.filter((exam) => state.settings.uHeftExams?.[exam.name]?.done);
+  return `
+    <section>
+      <div class="section-head">
+        <h2>U-Heft</h2>
+        <span>${completed.length ? `${completed.length} durchgeführt` : "Noch keine U dokumentiert"}</span>
+      </div>
+      <div class="analytics-list">
+        <article class="chart-card">
+          <div class="chart-title stacked">
+            <span>Durchgeführte U-Untersuchungen</span>
+            <small>Zum Nachtragen und Wiederfinden, lokal gespeichert.</small>
+          </div>
+          <div class="uheft-exam-list">
+            ${uHeftSchedule.map(renderUHeftExamCard).join("")}
+          </div>
+        </article>
+      </div>
+    </section>
+  `;
+}
+
+function renderUHeftExamCard(exam) {
+  const record = state.settings.uHeftExams?.[exam.name] || {};
+  return `
+    <article class="uheft-exam-card ${record.done ? "done" : ""}">
+      <div class="uheft-exam-head">
+        <label><input type="checkbox" data-action="toggle-uheft-exam" data-exam="${escapeAttr(exam.name)}" ${record.done ? "checked" : ""} /> ${escapeHtml(exam.name)}</label>
+        <span>${escapeHtml(exam.window)}</span>
+      </div>
+      <div class="uheft-exam-fields">
+        <div class="field compact-field"><label for="uheft-date-${escapeAttr(exam.name)}">Datum <span>Optional</span></label><input id="uheft-date-${escapeAttr(exam.name)}" type="date" data-uheft-date="${escapeAttr(exam.name)}" value="${escapeAttr(record.doneAt ? record.doneAt.slice(0, 10) : "")}" /></div>
+        <div class="field compact-field"><label for="uheft-note-${escapeAttr(exam.name)}">Notiz <span>Optional</span></label><input id="uheft-note-${escapeAttr(exam.name)}" data-uheft-note="${escapeAttr(exam.name)}" value="${escapeAttr(record.notes || "")}" /></div>
       </div>
     </article>
   `;
@@ -1027,6 +1089,8 @@ function bindEvents() {
     "remove-demo": removeDemoData,
     "add-uheft-question": addUHeftQuestion,
     "remove-uheft-question": removeUHeftQuestion,
+    "mark-uheft-done": markUHeftDone,
+    "toggle-uheft-exam": toggleUHeftExam,
     "export-long": exportLongCsv,
     "export-separate": exportSeparateCsvs,
   };
@@ -1050,6 +1114,12 @@ function bindEvents() {
       csvImport.value = "";
     });
   }
+  document.querySelectorAll("[data-uheft-date]").forEach((input) => {
+    input.addEventListener("change", () => updateUHeftExam(input.dataset.uheftDate, { done: Boolean(input.value), doneAt: input.value ? new Date(input.value).toISOString() : "" }));
+  });
+  document.querySelectorAll("[data-uheft-note]").forEach((input) => {
+    input.addEventListener("change", () => updateUHeftExam(input.dataset.uheftNote, { notes: input.value.trim() }));
+  });
 }
 
 function openChoice() {
@@ -1231,6 +1301,32 @@ function addUHeftQuestion() {
 function removeUHeftQuestion(event) {
   const index = Number(event.currentTarget.dataset.index);
   state.settings.uHeftQuestions = (state.settings.uHeftQuestions || []).filter((_, itemIndex) => itemIndex !== index);
+  saveState();
+  render();
+}
+
+function markUHeftDone(event) {
+  updateUHeftExam(event.currentTarget.dataset.exam, { done: true, doneAt: new Date().toISOString() });
+}
+
+function toggleUHeftExam(event) {
+  const done = event.currentTarget.checked;
+  updateUHeftExam(event.currentTarget.dataset.exam, { done, doneAt: done ? new Date().toISOString() : "" });
+}
+
+function updateUHeftExam(name, patch) {
+  if (!name) return;
+  const current = state.settings.uHeftExams?.[name] || {};
+  state.settings.uHeftExams = {
+    ...(state.settings.uHeftExams || {}),
+    [name]: {
+      ...current,
+      ...patch,
+    },
+  };
+  if (!state.settings.uHeftExams[name].done && !state.settings.uHeftExams[name].doneAt && !state.settings.uHeftExams[name].notes) {
+    delete state.settings.uHeftExams[name];
+  }
   saveState();
   render();
 }
@@ -1467,22 +1563,56 @@ function latest(entries) {
 
 function nextUHeftExam() {
   const ageDays = childAgeDays();
-  const schedule = [
-    { name: "U1", window: "direkt nach Geburt", start: 0, end: 1 },
-    { name: "U2", window: "3.-10. Lebenstag", start: 3, end: 10 },
-    { name: "U3", window: "4.-5. Lebenswoche", start: 28, end: 35 },
-    { name: "U4", window: "3.-4. Lebensmonat", start: 91, end: 122 },
-    { name: "U5", window: "6.-7. Lebensmonat", start: 183, end: 213 },
-    { name: "U6", window: "10.-12. Lebensmonat", start: 304, end: 365 },
-    { name: "U7", window: "21.-24. Lebensmonat", start: 640, end: 730 },
-    { name: "U7a", window: "34.-36. Lebensmonat", start: 1035, end: 1095 },
-    { name: "U8", window: "46.-48. Lebensmonat", start: 1400, end: 1460 },
-    { name: "U9", window: "60.-64. Lebensmonat", start: 1826, end: 1948 },
-  ];
-  const exam = schedule.find((item) => ageDays <= item.end);
+  const completed = state.settings.uHeftExams || {};
+  const exam = uHeftSchedule.find((item) => !completed[item.name]?.done && ageDays <= item.end) || uHeftSchedule.find((item) => !completed[item.name]?.done);
   if (!exam) return { name: "U1-U9", window: "Gelbes Heft", status: "für dieses Alter liegen keine weiteren U1-U9-Fenster vor" };
   if (ageDays >= exam.start) return { ...exam, status: "aktuell im Zeitraum" };
   return { ...exam, status: `${formatDayDistance(exam.start - ageDays)} bis zum Zeitraum` };
+}
+
+function lastCompletedUDate() {
+  return Object.values(state.settings.uHeftExams || {})
+    .filter((record) => record.done && record.doneAt)
+    .map((record) => new Date(record.doneAt))
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => b - a)[0];
+}
+
+function growthSinceLastU() {
+  const lastU = lastCompletedUDate();
+  if (!lastU) return "Seit letzter U: noch keine U dokumentiert";
+  const parts = ["weight", "head", "length"].map((kind) => growthDeltaSince(kind, lastU)).filter(Boolean);
+  return parts.length ? `Seit letzter U: ${parts.join(" · ")}` : "Seit letzter U: noch kein Vergleichswert";
+}
+
+function growthDeltaSince(kind, sinceDate) {
+  const values = measurements(kind);
+  const latestValue = values.at(-1);
+  const prior = [...values].reverse().find((entry) => new Date(entry.timestamp) <= sinceDate);
+  if (!latestValue || !prior || latestValue.id === prior.id) return "";
+  const delta = Number(latestValue.value) - Number(prior.value);
+  const label = { weight: "Gewicht", head: "Kopfumfang", length: "Länge" }[kind];
+  const unit = latestValue.unit || (kind === "weight" ? "g" : "cm");
+  const formatted = kind === "weight" ? `${Math.round(delta)} ${unit}` : `${delta.toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
+  return `${label} ${delta >= 0 ? "+" : ""}${formatted}`;
+}
+
+function renderFindingDetails(entry) {
+  const details = [
+    entry.data?.place ? `Ort: ${entry.data.place}` : "",
+    entry.data?.findingType ? `Art: ${entry.data.findingType}` : "",
+    entry.data?.vmax !== undefined ? `Vmax: ${entry.data.vmax} m/s` : "",
+    entry.data?.gradient !== undefined ? `Druckgradient: ${entry.data.gradient} mmHg` : "",
+    entry.data?.insufficiency ? `Undichtigkeit: ${entry.data.insufficiency}` : "",
+    entry.data?.assessment ? `Einschätzung: ${entry.data.assessment}` : "",
+    entry.notes ? `Notiz: ${entry.notes}` : "",
+  ].filter(Boolean);
+  return `
+    <details class="uheft-finding">
+      <summary>Letzter Arztbefund · ${escapeHtml(dateTimeText(entry.timestamp))}</summary>
+      <div>${details.length ? details.map((item) => `<span>${escapeHtml(item)}</span>`).join("") : `<span>Keine weiteren Details dokumentiert.</span>`}</div>
+    </details>
+  `;
 }
 
 function childAgeDays() {

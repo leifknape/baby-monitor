@@ -308,7 +308,7 @@ button {
 
 .bottom-nav-inner {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   width: min(100%, 520px);
   height: 100%;
   margin: 0 auto;
@@ -773,7 +773,8 @@ button {
 }
 
 .uheft-summary > div,
-.uheft-question {
+.uheft-question,
+.uheft-finding {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -787,9 +788,18 @@ button {
 }
 
 .uheft-summary span,
-.uheft-question span {
+.uheft-summary small,
+.uheft-question span,
+.uheft-finding span {
+  display: block;
+  margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.uheft-finding summary {
+  cursor: pointer;
+  font-weight: 800;
 }
 
 .uheft-add {
@@ -812,6 +822,57 @@ button {
   width: 36px;
   min-height: 36px;
   box-shadow: none;
+}
+
+.uheft-exam-list {
+  display: grid;
+  gap: 10px;
+}
+
+.uheft-exam-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.uheft-exam-card.done {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.uheft-exam-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.uheft-exam-head label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 850;
+}
+
+.uheft-exam-head input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+}
+
+.uheft-exam-head span {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: right;
+}
+
+.uheft-exam-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
 }
 
 .achievement-item {
