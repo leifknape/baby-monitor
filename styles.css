@@ -489,8 +489,10 @@ button {
 .field input,
 .field select,
 .field textarea {
+  box-sizing: border-box;
   min-width: 0;
   width: 100%;
+  max-width: 100%;
   min-height: 46px;
   border: 1px solid var(--line);
   border-radius: var(--radius);

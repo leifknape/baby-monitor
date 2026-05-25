@@ -1,5 +1,5 @@
 const STORAGE_KEY = "baby-monitor-state-v1";
-const DEMO_VERSION = 2;
+const DEMO_VERSION = 3;
 
 const entryChoices = [
   { id: "feeding", label: "Trinken", type: "feeding", icon: "bottle" },
@@ -10,7 +10,6 @@ const entryChoices = [
   { id: "temperature", label: "Temperatur", type: "measurement", kind: "temperature", icon: "thermometer" },
   { id: "spo2", label: "Sauerstoffsättigung", type: "measurement", kind: "spo2", icon: "drop" },
   { id: "heart_rate", label: "Herzfrequenz", type: "measurement", kind: "heart_rate", icon: "heart" },
-  { id: "respiratory_rate", label: "Atemfrequenz", type: "measurement", kind: "respiratory_rate", icon: "lungs" },
   { id: "observation", label: "Beobachtung", type: "observation", icon: "eye" },
   { id: "medication", label: "Medikament", type: "medication", icon: "pill" },
   { id: "medical_finding", label: "Arztbefund", type: "medical_finding", icon: "stethoscope" },
@@ -92,9 +91,8 @@ function createDemoEntries(childId) {
     entry("measurement", at(9, 5, -6), 61.2, "cm", { kind: "length" }),
     entry("measurement", at(9, 8, -6), 39.4, "cm", { kind: "head" }),
     entry("measurement", at(9, 12, -6), 36.8, "°C", { kind: "temperature", situation: "Achsel" }),
-    entry("measurement", at(9, 14, -6), 98, "%", { kind: "spo2", situation: "wach" }),
-    entry("measurement", at(9, 16, -6), 132, "bpm", { kind: "heart_rate", situation: "ruhig" }),
-    entry("measurement", at(9, 18, -6), 36, "/min", { kind: "respiratory_rate", situation: "ruhig" }),
+    entry("measurement", at(9, 14, -6), 97.5, "%", { kind: "spo2", situation: "wach", min: 97, max: 98 }),
+    entry("measurement", at(9, 16, -6), 131, "bpm", { kind: "heart_rate", situation: "ruhig", min: 126, max: 136 }),
 
     entry("feeding", at(7, 0, -5), 100, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(12, 15, -5), 110, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
@@ -105,9 +103,8 @@ function createDemoEntries(childId) {
     entry("measurement", at(8, 35, -5), 61.4, "cm", { kind: "length" }),
     entry("measurement", at(8, 38, -5), 39.6, "cm", { kind: "head" }),
     entry("measurement", at(8, 40, -5), 36.9, "°C", { kind: "temperature", situation: "Stirn" }),
-    entry("measurement", at(8, 42, -5), 97, "%", { kind: "spo2", situation: "schlafend" }),
-    entry("measurement", at(8, 44, -5), 126, "bpm", { kind: "heart_rate", situation: "schlafend" }),
-    entry("measurement", at(8, 46, -5), 34, "/min", { kind: "respiratory_rate", situation: "schlafend" }),
+    entry("measurement", at(8, 42, -5), 96.5, "%", { kind: "spo2", situation: "schlafend", min: 96, max: 97 }),
+    entry("measurement", at(8, 44, -5), 124, "bpm", { kind: "heart_rate", situation: "schlafend", min: 120, max: 128 }),
 
     entry("feeding", at(6, 40, -4), 105, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(11, 45, -4), 115, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
@@ -130,9 +127,8 @@ function createDemoEntries(childId) {
     entry("measurement", at(9, 0, -3), 6330, "g", { kind: "weight" }),
     entry("measurement", at(9, 3, -3), 61.7, "cm", { kind: "length" }),
     entry("measurement", at(9, 6, -3), 39.8, "cm", { kind: "head" }),
-    entry("measurement", at(9, 12, -3), 98, "%", { kind: "spo2", situation: "wach" }),
-    entry("measurement", at(9, 14, -3), 136, "bpm", { kind: "heart_rate", situation: "wach" }),
-    entry("measurement", at(9, 16, -3), 38, "/min", { kind: "respiratory_rate", situation: "wach" }),
+    entry("measurement", at(9, 12, -3), 97.5, "%", { kind: "spo2", situation: "wach", min: 97, max: 98 }),
+    entry("measurement", at(9, 14, -3), 136, "bpm", { kind: "heart_rate", situation: "wach", min: 132, max: 140 }),
 
     entry("feeding", at(7, 10, -2), 115, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(12, 0, -2), 125, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
@@ -156,9 +152,8 @@ function createDemoEntries(childId) {
     entry("measurement", at(8, 30, -1), 6400, "g", { kind: "weight" }),
     entry("measurement", at(8, 34, -1), 61.9, "cm", { kind: "length" }),
     entry("measurement", at(8, 37, -1), 40.0, "cm", { kind: "head" }),
-    entry("measurement", at(8, 40, -1), 97, "%", { kind: "spo2", situation: "schlafend" }),
-    entry("measurement", at(8, 42, -1), 128, "bpm", { kind: "heart_rate", situation: "schlafend" }),
-    entry("measurement", at(8, 44, -1), 35, "/min", { kind: "respiratory_rate", situation: "schlafend" }),
+    entry("measurement", at(8, 40, -1), 97.5, "%", { kind: "spo2", situation: "schlafend", min: 97, max: 98 }),
+    entry("measurement", at(8, 42, -1), 126, "bpm", { kind: "heart_rate", situation: "schlafend", min: 122, max: 130 }),
 
     entry("feeding", at(6, 10), 95, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }, "ruhig getrunken"),
     entry("diaper", at(7, 5), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }, "morgens"),
@@ -170,9 +165,8 @@ function createDemoEntries(childId) {
     entry("measurement", at(17, 5), 62, "cm", { kind: "length" }),
     entry("measurement", at(17, 7), 40, "cm", { kind: "head" }),
     entry("measurement", at(17, 10), 36.9, "°C", { kind: "temperature", situation: "Achsel" }),
-    entry("measurement", at(17, 12), 98, "%", { kind: "spo2", situation: "wach" }),
-    entry("measurement", at(17, 14), 134, "bpm", { kind: "heart_rate", situation: "ruhig" }),
-    entry("measurement", at(17, 16), 36, "/min", { kind: "respiratory_rate", situation: "ruhig" }),
+    entry("measurement", at(17, 12), 97.5, "%", { kind: "spo2", situation: "wach", min: 97, max: 98 }),
+    entry("measurement", at(17, 14), 133, "bpm", { kind: "heart_rate", situation: "ruhig", min: 128, max: 138 }),
     entry("feeding", at(20, 45), 105, "ml", { completion: "ja", spitUp: "wenig", milkType: "Pre" }),
     entry("medical_finding", at(11, 30), undefined, undefined, { findingType: "Echo", place: "Kinderkardiologie", vmax: 1.9, gradient: 15, insufficiency: "gering", assessment: "Befund als Freitext dokumentiert." }),
   ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -296,7 +290,6 @@ function dashboardMeasurementCards() {
     ["temperature", "Letzte Temperatur", "thermometer"],
     ["spo2", "Letzte SpO₂", "drop"],
     ["heart_rate", "Letzte Herzfrequenz", "heart"],
-    ["respiratory_rate", "Letzte Atemfrequenz", "lungs"],
   ].map(([kind, label, iconName]) => {
     const entry = latest(measurements(kind));
     if (!entry) return "";
@@ -594,7 +587,7 @@ function renderFormFields(choice, entry) {
 
   if (choice.id === "observation") {
     return `${base}
-      ${renderObservationCategories(data.categories || [])}
+      ${renderObservationCategories(data.categories || [], data.categoryNotes || {})}
       ${radioGroup("severity", "Schweregrad", ["leicht", "mittel", "stark"], data.severity || "leicht")}
       <div class="field"><label for="duration">Dauer <span>Optional</span></label><input id="duration" name="duration" value="${escapeAttr(data.duration || "")}" /></div>
       <div class="field"><label for="photo">Foto <span>Optional</span></label><input id="photo" name="photo" type="file" accept="image/*" /></div>
@@ -614,16 +607,13 @@ function renderFormFields(choice, entry) {
   }
 
   if (choice.id === "medical_finding") {
+    const findingType = data.findingType || "Echo";
     return `${base}
       <div class="field"><label for="place">Ort/Klinik/Praxis <span>Optional</span></label><input id="place" name="place" value="${escapeAttr(data.place || "")}" /></div>
-      ${selectField("findingType", "Art", ["Echo", "Herzkatheter", "Kontrolltermin", "Arztgespräch", "Entlassbrief", "Sonstiges"], data.findingType)}
-      <div class="field-row">
-        <div class="field"><label for="vmax">Vmax m/s <span>Optional</span></label><input id="vmax" name="vmax" type="number" step="0.01" value="${data.vmax || ""}" /></div>
-        <div class="field"><label for="gradient">Druckgradient mmHg <span>Optional</span></label><input id="gradient" name="gradient" type="number" step="0.1" value="${data.gradient || ""}" /></div>
+      ${selectField("findingType", "Art", ["Echo", "Herzkatheter", "Kontrolltermin", "Arztgespräch", "Entlassbrief", "Sonstiges"], findingType)}
+      <div data-finding-fields>
+        ${renderFindingSpecificFields(findingType, data)}
       </div>
-      ${selectField("insufficiency", "Pulmonalklappen-Undichtigkeit Optional", ["", "keine", "gering", "mittel", "hochgradig", "nicht angegeben"], data.insufficiency)}
-      <div class="field"><label for="assessment">Ärztliche Einschätzung <span>Optional</span></label><textarea id="assessment" name="assessment">${escapeHtml(data.assessment || "")}</textarea></div>
-      <div class="field"><label for="nextControl">Nächster Kontrolltermin <span>Optional</span></label><input id="nextControl" name="nextControl" type="datetime-local" value="${data.nextControl ? toLocalInputValue(data.nextControl) : ""}" /></div>
       <div class="field"><label for="file">Datei/Foto <span>Optional</span></label><input id="file" name="file" type="file" /></div>
       ${notesField(notes)}`;
   }
@@ -642,16 +632,26 @@ function renderMeasurementFields(choice, entry, base, notes) {
     head: ["Kopfumfang in cm", "cm", "number", "0.1", "Nur eintragen, wenn gemessen"],
     temperature: ["Temperatur in °C", "°C", "number", "0.1", "Optional"],
     spo2: ["SpO₂ in %", "%", "number", "1", "Nur eintragen, wenn gemessen"],
-    heart_rate: ["Herzfrequenz in bpm", "bpm", "number", "1", "Nur eintragen, wenn gemessen"],
-    respiratory_rate: ["Atemzüge pro Minute", "/min", "number", "1", "Nur eintragen, wenn gemessen"],
+    heart_rate: ["Herzfrequenz in bpm", "bpm", "number", "1", "Nur eintragen, wenn beobachtet"],
   };
   const [label, unit, type, step, placeholder] = specs[choice.kind];
   const situationOptions = {
     temperature: ["", "rektal", "Ohr", "Stirn", "Achsel", "unbekannt"],
     spo2: ["", "wach", "schlafend", "unruhig", "schreiend", "nach dem Trinken", "sonstiges"],
     heart_rate: ["", "ruhig", "schlafend", "schreiend", "trinkt", "unruhig", "sonstiges"],
-    respiratory_rate: ["", "ruhig", "schlafend", "unruhig", "schreiend", "sonstiges"],
   };
+  if (["spo2", "heart_rate"].includes(choice.kind)) {
+    const min = data.min ?? entry?.value ?? "";
+    const max = data.max ?? entry?.value ?? "";
+    return `${base}
+      <div class="field-row">
+        <div class="field"><label for="valueMin">Niedrigster Wert <span>Optional</span></label><input id="valueMin" name="valueMin" type="${type}" step="${step}" value="${min}" placeholder="${placeholder}" /></div>
+        <div class="field"><label for="valueMax">Höchster Wert <span>Optional</span></label><input id="valueMax" name="valueMax" type="${type}" step="${step}" value="${max}" placeholder="${placeholder}" /></div>
+      </div>
+      <input type="hidden" name="unit" value="${unit}" />
+      ${selectField("situation", "Situation Optional", situationOptions[choice.kind], data.situation)}
+      ${notesField(notes)}`;
+  }
   return `${base}
     <div class="field"><label for="value">${label} <span>Optional</span></label><input id="value" name="value" type="${type}" step="${step}" value="${entry?.value || ""}" placeholder="${placeholder}" /></div>
     <input type="hidden" name="unit" value="${unit}" />
@@ -662,6 +662,23 @@ function renderMeasurementFields(choice, entry, base, notes) {
 
 function notesField(notes) {
   return `<div class="field"><label for="notes">Notiz <span>Optional</span></label><textarea id="notes" name="notes">${escapeHtml(notes || "")}</textarea></div>`;
+}
+
+function renderFindingSpecificFields(findingType, data) {
+  const assessment = `<div class="field"><label for="assessment">Ärztliche Einschätzung <span>Optional</span></label><textarea id="assessment" name="assessment">${escapeHtml(data.assessment || "")}</textarea></div>`;
+  const nextControl = `<div class="field"><label for="nextControl">Nächster Kontrolltermin <span>Optional</span></label><input id="nextControl" name="nextControl" type="datetime-local" value="${data.nextControl ? toLocalInputValue(data.nextControl) : ""}" /></div>`;
+  const echoFields = `
+    <div class="field-row">
+      <div class="field"><label for="vmax">Vmax m/s <span>Optional</span></label><input id="vmax" name="vmax" type="number" step="0.01" value="${data.vmax || ""}" /></div>
+      <div class="field"><label for="gradient">Druckgradient mmHg <span>Optional</span></label><input id="gradient" name="gradient" type="number" step="0.1" value="${data.gradient || ""}" /></div>
+    </div>
+    ${selectField("insufficiency", "Pulmonalklappen-Undichtigkeit Optional", ["", "keine", "gering", "mittel", "hochgradig", "nicht angegeben"], data.insufficiency)}
+  `;
+  if (findingType === "Echo") return `${echoFields}${assessment}${nextControl}`;
+  if (findingType === "Herzkatheter") return `${assessment}${nextControl}`;
+  if (findingType === "Kontrolltermin") return `${nextControl}${assessment}`;
+  if (findingType === "Arztgespräch" || findingType === "Entlassbrief") return assessment;
+  return `${assessment}${nextControl}`;
 }
 
 function radioGroup(name, label, options, selected) {
@@ -701,14 +718,14 @@ function selectField(name, label, options, selected) {
   `;
 }
 
-function renderObservationCategories(selected) {
+function renderObservationCategories(selected, selectedNotes = {}) {
   const groups = {
-    "Atmung": ["schnelle Atmung", "angestrengte Atmung", "Atempausen", "ungewöhnlich langsame Atmung"],
-    "Farbe/Kreislauf": ["blass", "blau/grau", "marmoriert", "kalte Hände/Füße"],
-    "Trinken": ["trinkt schlechter als sonst", "schwitzt beim Trinken", "erschöpft", "spuckt mehr", "Erbrechen"],
-    "Verhalten": ["ungewöhnlich schläfrig", "sehr unruhig", "schwer weckbar", "schrilles Schreien"],
-    "Wunde/Einstichstelle": ["Blutung", "Schwellung", "Rötung", "Wärme", "Sekret"],
-    "Sonstiges": ["Fieber", "weniger nasse Windeln", "anderes"],
+    "Atmung": ["ruhige Atmung", "freie Atmung", "schnelle Atmung", "angestrengte Atmung", "Atempausen"],
+    "Farbe/Kreislauf": ["rosig", "warme Hände/Füße", "blass", "blau/grau", "marmoriert", "kalte Hände/Füße"],
+    "Trinken": ["trinkt gut", "trinkt entspannter", "trinkt schlechter als sonst", "schwitzt beim Trinken", "spuckt mehr", "Erbrechen"],
+    "Verhalten": ["wach und zufrieden", "gut weckbar", "entspannt", "ungewöhnlich schläfrig", "sehr unruhig", "schwer weckbar", "schrilles Schreien"],
+    "Wunde/Einstichstelle": ["unauffällig", "trocken", "Blutung", "Schwellung", "Rötung", "Wärme", "Sekret"],
+    "Sonstiges": ["guter Gesamteindruck", "mehr nasse Windeln", "Fieber", "weniger nasse Windeln", "anderes"],
   };
   return Object.entries(groups).map(([group, options]) => `
     <section class="checkbox-section">
@@ -716,6 +733,7 @@ function renderObservationCategories(selected) {
       <div class="checkbox-grid">
         ${options.map((option) => `<label><input type="checkbox" name="categories" value="${escapeAttr(`${group}: ${option}`)}" ${selected.includes(`${group}: ${option}`) ? "checked" : ""} /> ${option}</label>`).join("")}
       </div>
+      <div class="field compact-field"><label for="category-${slugify(group)}">Notiz zu ${group} <span>Optional</span></label><input id="category-${slugify(group)}" name="categoryNote:${escapeAttr(group)}" value="${escapeAttr(selectedNotes[group] || "")}" /></div>
     </section>
   `).join("");
 }
@@ -788,6 +806,13 @@ function bindEvents() {
       range.value = number.value || 0;
     });
   });
+  const findingType = document.getElementById("findingType");
+  if (findingType) {
+    findingType.addEventListener("change", () => {
+      const target = document.querySelector("[data-finding-fields]");
+      if (target) target.innerHTML = renderFindingSpecificFields(findingType.value, {});
+    });
+  }
   const actions = {
     "save-child": saveChild,
     "save-settings": saveSettings,
@@ -845,7 +870,7 @@ async function saveEntry(choiceId, formData) {
     timestamp: new Date(formData.get("timestamp")).toISOString(),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
-    value: optionalNumber(formData.get("value")),
+    value: entryValueForChoice(choice, formData),
     unit: formData.get("unit") || undefined,
     data,
     notes: cleanString(formData.get("notes")),
@@ -863,6 +888,16 @@ async function saveEntry(choiceId, formData) {
   state.entries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   saveState();
   closeSheet();
+}
+
+function entryValueForChoice(choice, formData) {
+  if (["spo2", "heart_rate"].includes(choice.id)) {
+    const min = optionalNumber(formData.get("valueMin"));
+    const max = optionalNumber(formData.get("valueMax"));
+    if (min !== undefined && max !== undefined) return (min + max) / 2;
+    return min ?? max;
+  }
+  return optionalNumber(formData.get("value"));
 }
 
 function attachmentFrom(formData) {
@@ -902,9 +937,14 @@ function dataForChoice(choice, formData) {
   }
   if (choice.type === "measurement") {
     data.situation = cleanString(formData.get("situation"));
+    if (["spo2", "heart_rate"].includes(choice.id)) {
+      data.min = optionalNumber(formData.get("valueMin"));
+      data.max = optionalNumber(formData.get("valueMax"));
+    }
   }
   if (choice.id === "observation") {
     data.categories = formData.getAll("categories");
+    data.categoryNotes = categoryNotesFromForm(formData);
     data.severity = formData.get("severity") || undefined;
     data.duration = cleanString(formData.get("duration"));
   }
@@ -928,9 +968,23 @@ function dataForChoice(choice, formData) {
     data.title = cleanString(formData.get("title"));
   }
   Object.keys(data).forEach((key) => {
-    if (data[key] === undefined || data[key] === "" || (Array.isArray(data[key]) && !data[key].length)) delete data[key];
+    if (
+      data[key] === undefined ||
+      data[key] === "" ||
+      (Array.isArray(data[key]) && !data[key].length) ||
+      (data[key] && typeof data[key] === "object" && !Array.isArray(data[key]) && !Object.keys(data[key]).length)
+    ) delete data[key];
   });
   return data;
+}
+
+function categoryNotesFromForm(formData) {
+  return [...formData.entries()].reduce((notes, [key, value]) => {
+    if (!key.startsWith("categoryNote:")) return notes;
+    const text = cleanString(value);
+    if (text) notes[key.slice("categoryNote:".length)] = text;
+    return notes;
+  }, {});
 }
 
 function saveChild() {
@@ -1167,7 +1221,7 @@ function measurements(kind) {
 }
 
 function latestMeasurementSummary() {
-  const candidates = ["length", "head", "temperature", "spo2", "heart_rate", "respiratory_rate"]
+  const candidates = ["length", "head", "temperature", "spo2", "heart_rate"]
     .map((kind) => latest(measurements(kind)))
     .filter(Boolean)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -1383,6 +1437,11 @@ function choiceForEntry(entry) {
 }
 
 function formatValue(entry) {
+  if (["spo2", "heart_rate"].includes(entry.data?.kind) && (entry.data?.min !== undefined || entry.data?.max !== undefined)) {
+    const min = entry.data?.min ?? entry.value;
+    const max = entry.data?.max ?? entry.value;
+    return min === max ? `${min} ${entry.unit || ""}`.trim() : `${min}-${max} ${entry.unit || ""}`.trim();
+  }
   if (!Number.isFinite(Number(entry.value))) return "";
   if (entry.data?.kind === "weight") {
     const grams = Math.round(Number(entry.value));
@@ -1452,6 +1511,10 @@ function optionalNumber(value) {
 
 function cleanString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function slugify(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function firstLine(value) {
