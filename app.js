@@ -1381,12 +1381,18 @@ function rangeChart(title, entries, unit) {
         <path class="range-line high" d="${highPath}"></path>
         <path class="range-line low" d="${lowPath}"></path>
         ${points.map((point) => `<circle class="range-point high" cx="${point.x.toFixed(1)}" cy="${point.yHigh.toFixed(1)}" r="3.5"></circle><circle class="range-point low" cx="${point.x.toFixed(1)}" cy="${point.yLow.toFixed(1)}" r="3.5"></circle>`).join("")}
-        <text class="point-label" x="${latest.x.toFixed(1)}" y="${Math.max(16, latest.yHigh - 10).toFixed(1)}" text-anchor="end">${escapeHtml(`${latest.high} ${unit}`)}</text>
-        <text class="point-label" x="${latest.x.toFixed(1)}" y="${Math.min(136, latest.yLow + 16).toFixed(1)}" text-anchor="end">${escapeHtml(`${latest.low} ${unit}`)}</text>
+        ${points.map((point) => `
+          <text class="point-label" x="${point.x.toFixed(1)}" y="${Math.max(14, point.yHigh - 10).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.high, unit))}</text>
+          <text class="point-label" x="${point.x.toFixed(1)}" y="${Math.min(136, point.yLow + 16).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.low, unit))}</text>
+        `).join("")}
         ${points.map((point) => `<text class="axis-label" x="${point.x.toFixed(1)}" y="164" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(shortDateText(point.entry.timestamp))}</text>`).join("")}
       </svg>
     </div>
   `;
+}
+
+function rangePointLabel(value, unit) {
+  return `${Number(value).toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 function edgeAnchor(index, count) {
