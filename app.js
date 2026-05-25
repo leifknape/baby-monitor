@@ -125,6 +125,8 @@ function defaultState() {
       darkMode: true,
       growthReferenceSource: "who",
       growthReferenceSex: "none",
+      correctedAgeEnabled: false,
+      dueDate: "",
       uHeftQuestions: [{ question: "Gibt es etwas, das wir bis zur nächsten U beobachten sollen?", answer: "" }],
       uHeftExams: {},
       demoVersion: DEMO_VERSION,
@@ -304,7 +306,7 @@ function renderTopbar() {
         <div class="avatar" aria-hidden="true">${state.child.name.slice(0, 1).toUpperCase()}</div>
         <div>
           <h1 class="child-name">${escapeHtml(state.child.name)}</h1>
-          <div class="child-meta">${childAgeText(state.child.birthDate)}</div>
+          <div class="child-meta">${childAgeText()}</div>
         </div>
       </div>
     </header>
@@ -706,6 +708,9 @@ function renderSettings() {
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
         ${selectField("growth-reference-source", "Referenzkurven", [["who", "WHO"], ["german", "U-Heft / deutsche Referenzkurven"]], state.settings.growthReferenceSource || "who")}
         ${selectField("growth-reference-sex", "Perzentilen anzeigen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
+        <div class="segmented"><label><input type="checkbox" id="corrected-age-enabled" ${state.settings.correctedAgeEnabled ? "checked" : ""} /> Korrigiertes Alter verwenden</label></div>
+        <div class="field"><label for="due-date">Errechneter Geburtstermin <span>Optional</span></label><input id="due-date" type="date" value="${escapeAttr(state.settings.dueDate || "")}" /></div>
+        <div class="empty">Korrigiertes Alter wird nur als Entwicklungs- und U-Heft-Orientierung angezeigt.</div>
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
         <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
@@ -1280,6 +1285,8 @@ function saveSettings() {
   state.settings.defaultMilk = document.getElementById("default-milk").value.trim() || "Pre";
   state.settings.growthReferenceSource = document.getElementById("growth-reference-source").value;
   state.settings.growthReferenceSex = document.getElementById("growth-reference-sex").value;
+  state.settings.correctedAgeEnabled = document.getElementById("corrected-age-enabled").checked;
+  state.settings.dueDate = document.getElementById("due-date").value || "";
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
   saveState();
@@ -1573,12 +1580,13 @@ function latest(entries) {
 }
 
 function nextUHeftExam() {
-  const ageDays = childAgeDays();
+  const ageDays = childAgeDays({ corrected: true });
   const completed = state.settings.uHeftExams || {};
   const exam = uHeftSchedule.find((item) => !completed[item.name]?.done && ageDays <= item.end) || uHeftSchedule.find((item) => !completed[item.name]?.done);
+  const suffix = correctedAgeActive() ? " (korrigiert)" : "";
   if (!exam) return { name: "U1-U9", window: "Gelbes Heft", status: "für dieses Alter liegen keine weiteren U1-U9-Fenster vor" };
-  if (ageDays >= exam.start) return { ...exam, status: "aktuell im Zeitraum" };
-  return { ...exam, status: `${formatDayDistance(exam.start - ageDays)} bis zum Zeitraum` };
+  if (ageDays >= exam.start) return { ...exam, status: `aktuell im Zeitraum${suffix}` };
+  return { ...exam, status: `${formatDayDistance(exam.start - ageDays)} bis zum Zeitraum${suffix}` };
 }
 
 function lastCompletedUDate() {
@@ -1715,10 +1723,10 @@ function renderFindingDetails(entry) {
   `;
 }
 
-function childAgeDays() {
-  const birth = new Date(state.child.birthDate);
-  if (Number.isNaN(birth.getTime())) return 0;
-  return Math.max(0, Math.floor((startOfDay(new Date()) - startOfDay(birth)) / (24 * 60 * 60 * 1000)));
+function childAgeDays(options = {}) {
+  const origin = options.corrected && correctedAgeActive() ? new Date(state.settings.dueDate) : new Date(state.child.birthDate);
+  if (Number.isNaN(origin.getTime())) return 0;
+  return Math.max(0, Math.floor((startOfDay(new Date()) - startOfDay(origin)) / (24 * 60 * 60 * 1000)));
 }
 
 function formatDayDistance(days) {
@@ -2067,20 +2075,36 @@ function formatValue(entry) {
   return `${Number(entry.value).toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${entry.unit || ""}`.trim();
 }
 
-function childAgeText(dateString) {
-  const birth = new Date(dateString);
+function childAgeText() {
+  const birth = new Date(state.child.birthDate);
   if (Number.isNaN(birth.getTime())) return "";
   const now = new Date();
   if (birth > now) return "Geburtsdatum liegt in der Zukunft";
-  const totalDays = Math.floor((startOfDay(now) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
-  let months = (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth();
-  if (now.getDate() < birth.getDate()) months -= 1;
+  const calendar = ageTextFromDate(birth, now);
+  if (!correctedAgeActive()) return calendar;
+  const corrected = ageTextFromDate(new Date(state.settings.dueDate), now);
+  return `${calendar} · korrigiert ${corrected}`;
+}
+
+function ageTextFromDate(startDate, now = new Date()) {
+  if (Number.isNaN(startDate.getTime())) return "";
+  if (startDate > now) return "0 Wochen";
+  const totalDays = Math.floor((startOfDay(now) - startOfDay(startDate)) / (24 * 60 * 60 * 1000));
+  let months = (now.getFullYear() - startDate.getFullYear()) * 12 + now.getMonth() - startDate.getMonth();
+  if (now.getDate() < startDate.getDate()) months -= 1;
   months = Math.max(0, months);
-  const monthAnchor = addMonthsClamped(birth, months);
+  const monthAnchor = addMonthsClamped(startDate, months);
   const remainingDays = Math.max(0, Math.floor((startOfDay(now) - startOfDay(monthAnchor)) / (24 * 60 * 60 * 1000)));
   const remainingWeeks = Math.floor(remainingDays / 7);
   if (months === 0) return `${Math.floor(totalDays / 7)} Wochen`;
   return remainingWeeks ? `${months} Monate, ${remainingWeeks} Wochen` : `${months} Monate`;
+}
+
+function correctedAgeActive() {
+  if (!state.settings.correctedAgeEnabled || !state.settings.dueDate) return false;
+  const due = new Date(state.settings.dueDate);
+  const birth = new Date(state.child.birthDate);
+  return !Number.isNaN(due.getTime()) && !Number.isNaN(birth.getTime()) && due > birth;
 }
 
 function addMonthsClamped(date, months) {
