@@ -85,6 +85,7 @@ const uHeftSchedule = [
 const navItems = [
   { id: "dashboard", label: "Übersicht", icon: "home" },
   { id: "timeline", label: "Timeline", icon: "list" },
+  { id: "monthly", label: "Rückblick", icon: "calendar" },
   { id: "spacer", label: "", icon: "" },
   { id: "analytics", label: "Verlauf", icon: "chart" },
   { id: "uheft", label: "U-Heft", icon: "note" },
@@ -103,7 +104,7 @@ let customRange = {
 
 function initialViewFromHash() {
   const hash = location.hash.replace("#", "");
-  return ["dashboard", "timeline", "analytics", "uheft", "settings"].includes(hash) ? hash : "dashboard";
+  return ["dashboard", "timeline", "monthly", "analytics", "uheft", "settings"].includes(hash) ? hash : "dashboard";
 }
 
 function defaultState() {
@@ -315,6 +316,7 @@ function renderTopbar() {
 
 function renderView() {
   if (view === "timeline") return renderTimeline();
+  if (view === "monthly") return renderMonthlyReview();
   if (view === "analytics") return renderAnalytics();
   if (view === "uheft") return renderUHeftView();
   if (view === "settings") return renderSettings();
@@ -449,6 +451,83 @@ function renderEntryRow(entry) {
         <div class="entry-detail">${escapeHtml(detailForEntry(entry))}</div>
       </div>
       <button class="icon-button" type="button" title="Eintrag öffnen" data-action="edit-entry" data-id="${entry.id}">${icon("chevron")}</button>
+    </article>
+  `;
+}
+
+function renderMonthlyReview() {
+  const now = new Date();
+  const monthEntries = entriesForMonth(now);
+  const feedings = monthEntries.filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
+  const diapers = monthEntries.filter((entry) => entry.type === "diaper");
+  const milestones = monthEntries.filter((entry) => entry.type === "milestone");
+  const observations = monthEntries.filter((entry) => entry.type === "observation");
+  const findings = monthEntries.filter((entry) => entry.type === "medical_finding");
+  const positives = positiveDevelopmentItems().filter((item) => monthEntries.some((entry) => entry.id === item.entry.id));
+  const monthMeasurements = (kind) => measurements(kind).filter((entry) => isSameMonth(new Date(entry.timestamp), now));
+  const growthParts = ["weight", "head", "length"].map((kind) => monthlyGrowthPart(kind, monthMeasurements(kind))).filter(Boolean);
+  const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
+  const monthLabel = now.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+
+  return `
+    <section>
+      <div class="section-head">
+        <h2>Monatsrückblick</h2>
+        <span>${escapeHtml(monthLabel)}</span>
+      </div>
+      <div class="monthly-grid">
+        ${monthEntries.length ? `
+          <article class="chart-card">
+            <div class="chart-title stacked"><span>Zusammenfassung</span><small>${monthEntries.length} Einträge dokumentiert</small></div>
+            <div class="monthly-list">
+              ${growthParts.length ? `<div><strong>Wachstum</strong><span>${escapeHtml(growthParts.join(" · "))}</span></div>` : ""}
+              ${feedings.length ? `<div><strong>Trinken</strong><span>${feedings.length} Fütterungen · ${totalMl} ml insgesamt</span></div>` : ""}
+              ${diapers.length ? `<div><strong>Windeln</strong><span>${diapers.length} Einträge · ${diapers.filter((entry) => entry.data?.wet).length} nass · ${diapers.filter((entry) => entry.data?.stool).length} Stuhl</span></div>` : ""}
+              ${milestones.length ? `<div><strong>Meilensteine</strong><span>${milestones.length} Einträge</span></div>` : ""}
+              ${positives.length ? `<div><strong>Positive Entwicklung</strong><span>${positives.length} gute Momente oder neue Fähigkeiten</span></div>` : ""}
+              ${findings.length ? `<div><strong>Arztbefunde</strong><span>${findings.length} dokumentiert</span></div>` : ""}
+            </div>
+          </article>
+          ${renderMonthlyEntries("Neue Fähigkeiten", milestones, "flag")}
+          ${renderMonthlyPositive(positives)}
+          ${renderMonthlyEntries("Beobachtungen", observations, "eye")}
+          ${renderMonthlyEntries("Arztbefunde", findings, "stethoscope")}
+        ` : `<div class="empty">Noch keine Einträge in diesem Monat vorhanden.</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderMonthlyEntries(title, entries, iconName) {
+  if (!entries.length) return "";
+  return `
+    <article class="chart-card">
+      <div class="chart-title"><span>${escapeHtml(title)}</span><span>${entries.length}</span></div>
+      <div class="monthly-list">
+        ${entries.slice(0, 6).map((entry) => `
+          <div>
+            <strong>${escapeHtml(dateTimeText(entry.timestamp))}</strong>
+            <span>${icon(iconName)} ${escapeHtml(detailForEntry(entry))}</span>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderMonthlyPositive(items) {
+  if (!items.length) return "";
+  return `
+    <article class="chart-card">
+      <div class="chart-title"><span>Positive Entwicklung</span><span>${items.length}</span></div>
+      <div class="monthly-list">
+        ${items.slice(0, 6).map((item) => `
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            <span>${escapeHtml(dateTimeText(item.entry.timestamp))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</span>
+          </div>
+        `).join("")}
+      </div>
     </article>
   `;
 }
@@ -1582,6 +1661,26 @@ function entriesForDay(date) {
     const timestamp = new Date(entry.timestamp);
     return timestamp >= start && timestamp < end;
   });
+}
+
+function entriesForMonth(date) {
+  return state.entries.filter((entry) => isSameMonth(new Date(entry.timestamp), date));
+}
+
+function isSameMonth(date, reference) {
+  return date.getFullYear() === reference.getFullYear() && date.getMonth() === reference.getMonth();
+}
+
+function monthlyGrowthPart(kind, values) {
+  if (!values.length) return "";
+  const first = values[0];
+  const last = values.at(-1);
+  const label = { weight: "Gewicht", head: "Kopfumfang", length: "Länge" }[kind];
+  if (values.length === 1) return `${label}: ${formatValue(last)}`;
+  const delta = Number(last.value) - Number(first.value);
+  const unit = last.unit || (kind === "weight" ? "g" : "cm");
+  const formatted = kind === "weight" ? `${Math.round(delta)} ${unit}` : `${delta.toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
+  return `${label}: ${formatValue(last)} (${delta >= 0 ? "+" : ""}${formatted})`;
 }
 
 function measurements(kind) {

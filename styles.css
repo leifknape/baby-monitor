@@ -308,7 +308,7 @@ button {
 
 .bottom-nav-inner {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 92px repeat(3, minmax(0, 1fr));
   width: min(100%, 520px);
   height: 100%;
   margin: 0 auto;
@@ -747,6 +747,41 @@ button {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.3;
+}
+
+.monthly-grid,
+.monthly-list {
+  display: grid;
+  gap: 8px;
+}
+
+.monthly-list > div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.monthly-list strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+
+.monthly-list span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.monthly-list svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--accent-strong);
 }
 
 .achievement-list {
