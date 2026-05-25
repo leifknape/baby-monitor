@@ -774,7 +774,8 @@ button {
 
 .uheft-summary > div,
 .uheft-question,
-.uheft-finding {
+.uheft-finding,
+.uheft-snapshot {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -797,9 +798,14 @@ button {
   font-size: 13px;
 }
 
-.uheft-finding summary {
+.uheft-finding summary,
+.uheft-snapshot summary {
   cursor: pointer;
   font-weight: 800;
+}
+
+.uheft-snapshot > .uheft-summary {
+  margin-top: 10px;
 }
 
 .uheft-add {

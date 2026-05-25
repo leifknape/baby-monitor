@@ -453,7 +453,6 @@ function renderAnalytics() {
   const sections = [
     renderGrowthCharts(),
     renderDevelopmentProfile(),
-    renderUHeftCompanion(),
     renderFeedingCharts(),
     renderDiaperCharts(),
     renderMilestoneAchievements(),
@@ -518,18 +517,8 @@ function renderDevelopmentProfile() {
 
 function renderUHeftCompanion() {
   const nextExam = nextUHeftExam();
-  const recentSince = new Date();
-  recentSince.setDate(recentSince.getDate() - 30);
-  const latestGrowth = [
-    latest(measurements("weight")),
-    latest(measurements("head")),
-    latest(measurements("length")),
-  ].filter(Boolean);
-  const recentMilestones = state.entries.filter((entry) => entry.type === "milestone" && new Date(entry.timestamp) >= recentSince);
-  const recentObservations = state.entries.filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince);
-  const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
   const questions = state.settings.uHeftQuestions || [];
-  const growthSinceU = growthSinceLastU();
+  const summary = currentUHeftSummary(nextExam.name);
 
   return `
     <article class="chart-card">
@@ -547,12 +536,7 @@ function renderUHeftCompanion() {
           <div class="uheft-icon">${icon("note")}</div>
         </div>
         ${nextExam.name.startsWith("U") && nextExam.window !== "Gelbes Heft" ? `<button class="text-button full" type="button" data-action="mark-uheft-done" data-exam="${escapeAttr(nextExam.name)}">Als durchgeführt markieren</button>` : ""}
-        <div class="uheft-summary">
-          ${latestGrowth.length ? `<div><strong>Letzte Wachstumswerte</strong><span>${latestGrowth.map(formatValue).filter(Boolean).join(" · ")}</span>${growthSinceU ? `<small>${escapeHtml(growthSinceU)}</small>` : ""}</div>` : ""}
-          ${recentMilestones.length ? `<div><strong>Meilensteine</strong>${recentMilestones.slice(0, 4).map((entry) => `<span>${escapeHtml(dateTimeText(entry.timestamp))}: ${escapeHtml(detailForEntry(entry))}</span>`).join("")}</div>` : ""}
-          ${recentObservations.length ? `<div><strong>Beobachtungen</strong>${recentObservations.slice(0, 4).map((entry) => `<span>${escapeHtml(dateTimeText(entry.timestamp))}: ${escapeHtml(detailForEntry(entry))}</span>`).join("")}</div>` : ""}
-          ${latestFinding ? renderFindingDetails(latestFinding) : ""}
-        </div>
+        ${renderUHeftSummary(summary)}
         <div class="uheft-questions">
           <div class="uheft-label">Fragen für das Gespräch</div>
           ${questions.length ? questions.map((question, index) => `
@@ -580,6 +564,7 @@ function renderUHeftView() {
         <span>${completed.length ? `${completed.length} durchgeführt` : "Noch keine U dokumentiert"}</span>
       </div>
       <div class="analytics-list">
+        ${renderUHeftCompanion()}
         <article class="chart-card">
           <div class="chart-title stacked">
             <span>Durchgeführte U-Untersuchungen</span>
@@ -606,6 +591,12 @@ function renderUHeftExamCard(exam) {
         <div class="field compact-field"><label for="uheft-date-${escapeAttr(exam.name)}">Datum <span>Optional</span></label><input id="uheft-date-${escapeAttr(exam.name)}" type="date" data-uheft-date="${escapeAttr(exam.name)}" value="${escapeAttr(record.doneAt ? record.doneAt.slice(0, 10) : "")}" /></div>
         <div class="field compact-field"><label for="uheft-note-${escapeAttr(exam.name)}">Notiz <span>Optional</span></label><input id="uheft-note-${escapeAttr(exam.name)}" data-uheft-note="${escapeAttr(exam.name)}" value="${escapeAttr(record.notes || "")}" /></div>
       </div>
+      ${record.summary ? `
+        <details class="uheft-snapshot">
+          <summary>Gespeicherte Zusammenfassung</summary>
+          ${renderUHeftSummary(record.summary)}
+        </details>
+      ` : ""}
     </article>
   `;
 }
@@ -1317,12 +1308,17 @@ function toggleUHeftExam(event) {
 function updateUHeftExam(name, patch) {
   if (!name) return;
   const current = state.settings.uHeftExams?.[name] || {};
+  const nextRecord = {
+    ...current,
+    ...patch,
+  };
+  if (nextRecord.done && !nextRecord.summary) {
+    nextRecord.summary = currentUHeftSummary(name);
+  }
+  if (!nextRecord.done) delete nextRecord.summary;
   state.settings.uHeftExams = {
     ...(state.settings.uHeftExams || {}),
-    [name]: {
-      ...current,
-      ...patch,
-    },
+    [name]: nextRecord,
   };
   if (!state.settings.uHeftExams[name].done && !state.settings.uHeftExams[name].doneAt && !state.settings.uHeftExams[name].notes) {
     delete state.settings.uHeftExams[name];
@@ -1583,6 +1579,85 @@ function growthSinceLastU() {
   if (!lastU) return "Seit letzter U: noch keine U dokumentiert";
   const parts = ["weight", "head", "length"].map((kind) => growthDeltaSince(kind, lastU)).filter(Boolean);
   return parts.length ? `Seit letzter U: ${parts.join(" · ")}` : "Seit letzter U: noch kein Vergleichswert";
+}
+
+function currentUHeftSummary(examName) {
+  const recentSince = new Date();
+  recentSince.setDate(recentSince.getDate() - 30);
+  const latestGrowth = [
+    latest(measurements("weight")),
+    latest(measurements("head")),
+    latest(measurements("length")),
+  ].filter(Boolean);
+  const recentMilestones = state.entries
+    .filter((entry) => entry.type === "milestone" && new Date(entry.timestamp) >= recentSince)
+    .slice(0, 6)
+    .map(summaryEntry);
+  const recentObservations = state.entries
+    .filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince)
+    .slice(0, 6)
+    .map(summaryEntry);
+  const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
+  return {
+    examName,
+    createdAt: new Date().toISOString(),
+    growth: latestGrowth.map((entry) => ({
+      label: entryTitle(entry),
+      value: formatValue(entry),
+      timestamp: entry.timestamp,
+    })),
+    growthSinceU: growthSinceLastU(),
+    milestones: recentMilestones,
+    observations: recentObservations,
+    finding: latestFinding ? findingSummary(latestFinding) : null,
+    questions: [...(state.settings.uHeftQuestions || [])],
+  };
+}
+
+function summaryEntry(entry) {
+  return {
+    timestamp: entry.timestamp,
+    title: entryTitle(entry),
+    detail: detailForEntry(entry),
+    notes: entry.notes || "",
+  };
+}
+
+function findingSummary(entry) {
+  return {
+    timestamp: entry.timestamp,
+    detail: detailForEntry(entry),
+    lines: [
+      entry.data?.place ? `Ort: ${entry.data.place}` : "",
+      entry.data?.findingType ? `Art: ${entry.data.findingType}` : "",
+      entry.data?.vmax !== undefined ? `Vmax: ${entry.data.vmax} m/s` : "",
+      entry.data?.gradient !== undefined ? `Druckgradient: ${entry.data.gradient} mmHg` : "",
+      entry.data?.insufficiency ? `Undichtigkeit: ${entry.data.insufficiency}` : "",
+      entry.data?.assessment ? `Einschätzung: ${entry.data.assessment}` : "",
+      entry.notes ? `Notiz: ${entry.notes}` : "",
+    ].filter(Boolean),
+  };
+}
+
+function renderUHeftSummary(summary) {
+  return `
+    <div class="uheft-summary">
+      ${summary.growth?.length ? `<div><strong>Wachstumswerte</strong>${summary.growth.map((item) => `<span>${escapeHtml(item.label)}: ${escapeHtml(item.value)} · ${escapeHtml(dateTimeText(item.timestamp))}</span>`).join("")}${summary.growthSinceU ? `<small>${escapeHtml(summary.growthSinceU)}</small>` : ""}</div>` : ""}
+      ${summary.milestones?.length ? `<div><strong>Meilensteine</strong>${summary.milestones.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
+      ${summary.observations?.length ? `<div><strong>Beobachtungen</strong>${summary.observations.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
+      ${summary.finding ? renderFindingSummary(summary.finding) : ""}
+      ${summary.questions?.length ? `<div><strong>Fragen</strong>${summary.questions.map((question) => `<span>${escapeHtml(question)}</span>`).join("")}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderFindingSummary(finding) {
+  return `
+    <details class="uheft-finding">
+      <summary>Arztbefund · ${escapeHtml(dateTimeText(finding.timestamp))}</summary>
+      <div>${finding.lines?.length ? finding.lines.map((item) => `<span>${escapeHtml(item)}</span>`).join("") : `<span>${escapeHtml(finding.detail || "Keine weiteren Details dokumentiert.")}</span>`}</div>
+    </details>
+  `;
 }
 
 function growthDeltaSince(kind, sinceDate) {
