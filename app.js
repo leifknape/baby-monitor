@@ -332,6 +332,7 @@ function renderDashboard() {
   const latestObservation = latest(state.entries.filter((entry) => entry.type === "observation"));
   const latestMilestone = latest(state.entries.filter((entry) => entry.type === "milestone"));
   const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
+  const latestPositive = latest(positiveDevelopmentItems().map((item) => item.entry));
   const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
   const avgMl = feedings.length ? Math.round(totalMl / feedings.length) : null;
 
@@ -347,6 +348,7 @@ function renderDashboard() {
   dashboardMeasurementCards().forEach((card) => cards.push(card));
   if (latestObservation) cards.push(statCard("Letzte Beobachtung", firstLine(latestObservation.notes || categoriesText(latestObservation)), dateTimeText(latestObservation.timestamp), "eye"));
   if (latestMilestone) cards.push(statCard("Letzter Meilenstein", milestoneText(latestMilestone), dateTimeText(latestMilestone.timestamp), "flag"));
+  if (latestPositive) cards.push(statCard("Positiver Moment", positiveEntryText(latestPositive), dateTimeText(latestPositive.timestamp), "sparkles"));
   if (latestFinding) cards.push(statCard("Letzter Arztbefund", firstLine(latestFinding.data?.assessment || latestFinding.notes || latestFinding.data?.findingType || "Dokumentiert"), dateTimeText(latestFinding.timestamp), "stethoscope"));
 
   return `
@@ -455,6 +457,7 @@ function renderAnalytics() {
   const sections = [
     renderGrowthCharts(),
     renderDevelopmentProfile(),
+    renderPositiveDevelopment(),
     renderFeedingCharts(),
     renderDiaperCharts(),
     renderMilestoneAchievements(),
@@ -511,6 +514,30 @@ function renderDevelopmentProfile() {
               `).join("")}
             </div>
           </section>
+        `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderPositiveDevelopment() {
+  const items = positiveDevelopmentItems();
+  if (!items.length) return "";
+  return `
+    <article class="chart-card">
+      <div class="chart-title stacked">
+        <span>Positive Entwicklung</span>
+        <small>Neue Fähigkeiten und gute Momente.</small>
+      </div>
+      <div class="positive-list">
+        ${items.slice(0, 8).map((item) => `
+          <div class="positive-item">
+            <div class="positive-icon">${icon(item.icon)}</div>
+            <div>
+              <div class="positive-title">${escapeHtml(item.title)}</div>
+              <div class="positive-meta">${escapeHtml(dateTimeText(item.entry.timestamp))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</div>
+            </div>
+          </div>
         `).join("")}
       </div>
     </article>
@@ -1744,6 +1771,40 @@ function dailyCounts(entries, reducer) {
   return [...groups.entries()].map(([label, items]) => ({ label, value: reducer(items) })).slice(-7);
 }
 
+function positiveDevelopmentItems() {
+  const milestoneItems = state.entries
+    .filter((entry) => entry.type === "milestone")
+    .map((entry) => ({
+      entry,
+      title: milestoneText(entry) || "Meilenstein dokumentiert",
+      detail: entry.data?.status || "neue Fähigkeit",
+      icon: "flag",
+    }));
+  const observationItems = state.entries
+    .filter((entry) => entry.type === "observation" && positiveObservationText(entry))
+    .map((entry) => ({
+      entry,
+      title: positiveObservationText(entry),
+      detail: firstLine(entry.notes || ""),
+      icon: "sparkles",
+    }));
+  return [...milestoneItems, ...observationItems]
+    .sort((a, b) => new Date(b.entry.timestamp) - new Date(a.entry.timestamp));
+}
+
+function positiveObservationText(entry) {
+  const positiveTerms = ["ruhige Atmung", "freie Atmung", "rosig", "warme Hände/Füße", "trinkt gut", "trinkt entspannter", "wach und zufrieden", "gut weckbar", "entspannt", "unauffällig", "trocken", "guter Gesamteindruck", "mehr nasse Windeln"];
+  const positives = (entry.data?.categories || [])
+    .map((item) => item.split(": ").pop())
+    .filter((item) => positiveTerms.includes(item));
+  return positives.slice(0, 2).join(", ");
+}
+
+function positiveEntryText(entry) {
+  if (entry.type === "milestone") return milestoneText(entry) || "Meilenstein dokumentiert";
+  return positiveObservationText(entry) || firstLine(entry.notes || "Positiv dokumentiert");
+}
+
 function milestoneAchievements() {
   return state.entries
     .filter((entry) => entry.type === "milestone")
@@ -2197,6 +2258,7 @@ function icon(name) {
     lungs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4v16M12 10c-5-5-8-2-8 4v4c4 1 7-1 8-5M12 10c5-5 8-2 8 4v4c-4 1-7-1-8-5"/></svg>`,
     activity: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 13h4l2-6 4 12 2-6h4"/></svg>`,
     chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 5h14v10H9l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>`,
+    sparkles: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l1.4 4.1 4.1 1.4-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4zM18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8zM6 15l.6 1.6 1.6.4-1.6.6L6 19.2l-.6-1.6-1.6-.6 1.6-.4z"/></svg>`,
     eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
     flag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V4M6 5h11l-1.8 4L17 13H6"/><path d="M6 13h8"/></svg>`,
     pill: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 21 3 14a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7zM8 9l7 7"/></svg>`,
