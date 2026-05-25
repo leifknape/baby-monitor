@@ -1319,6 +1319,7 @@ function toggleUHeftExam(event) {
 function updateUHeftExam(name, patch) {
   if (!name) return;
   const current = state.settings.uHeftExams?.[name] || {};
+  const wasDone = Boolean(current.done);
   const nextRecord = {
     ...current,
     ...patch,
@@ -1333,6 +1334,9 @@ function updateUHeftExam(name, patch) {
   };
   if (!state.settings.uHeftExams[name].done && !state.settings.uHeftExams[name].doneAt && !state.settings.uHeftExams[name].notes) {
     delete state.settings.uHeftExams[name];
+  }
+  if (!wasDone && nextRecord.done) {
+    state.settings.uHeftQuestions = [];
   }
   saveState();
   render();
