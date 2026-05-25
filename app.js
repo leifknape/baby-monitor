@@ -1,5 +1,5 @@
 const STORAGE_KEY = "baby-monitor-state-v1";
-const DEMO_VERSION = 3;
+const DEMO_VERSION = 4;
 
 const entryChoices = [
   { id: "feeding", label: "Trinken", type: "feeding", icon: "bottle" },
@@ -11,9 +11,62 @@ const entryChoices = [
   { id: "spo2", label: "Sauerstoffsättigung", type: "measurement", kind: "spo2", icon: "drop" },
   { id: "heart_rate", label: "Herzfrequenz", type: "measurement", kind: "heart_rate", icon: "heart" },
   { id: "observation", label: "Beobachtung", type: "observation", icon: "eye" },
+  { id: "milestone", label: "Meilenstein", type: "milestone", icon: "flag" },
   { id: "medication", label: "Medikament", type: "medication", icon: "pill" },
   { id: "medical_finding", label: "Arztbefund", type: "medical_finding", icon: "stethoscope" },
   { id: "note", label: "Freie Notiz", type: "note", icon: "note" },
+];
+
+const milestoneGroups = [
+  {
+    age: "1 Monat",
+    items: ["schaut Gesichter an", "reagiert auf Geräusche", "bewegt Arme und Beine", "hebt den Kopf kurz in Bauchlage"],
+  },
+  {
+    age: "2 Monate",
+    items: ["erstes soziales Lächeln", "schaut euch an", "reagiert auf Stimme oder Geräusche", "hebt den Kopf in Bauchlage etwas an"],
+  },
+  {
+    age: "4 Monate",
+    items: ["hält den Kopf stabiler", "lacht oder gluckst", "verfolgt Dinge mit den Augen", "bringt Hände zum Mund", "stützt sich in Bauchlage auf"],
+  },
+  {
+    age: "6 Monate",
+    items: ["dreht sich oft", "greift gezielter nach Dingen", "bringt Dinge zum Mund", "reagiert auf Ansprache", "sitzt mit Unterstützung oder kurz frei"],
+  },
+  {
+    age: "9 Monate",
+    items: ["sitzt meist stabil", "robbt, krabbelt oder bewegt sich anders fort", "reagiert auf den Namen", "spielt Guck-guck", "fremdelt eventuell"],
+  },
+  {
+    age: "12 Monate",
+    items: ["zieht sich hoch", "steht mit Hilfe", "macht Schritte an Möbeln oder an Händen", "zeigt oder gestikuliert", "sagt eventuell erste Wörter gezielt"],
+  },
+  {
+    age: "15 Monate",
+    items: ["läuft oft allein oder mit wenig Hilfe", "zeigt auf Dinge", "imitiert einfache Tätigkeiten", "versteht einfache Aufforderungen"],
+  },
+  {
+    age: "18 Monate",
+    items: ["läuft sicherer", "sagt mehrere Wörter", "zeigt auf Körperteile oder interessante Dinge", "spielt einfacher mit Gegenständen"],
+  },
+  {
+    age: "2 Jahre",
+    items: ["rennt", "tritt einen Ball", "baut kleine Türme", "benutzt einfache Zwei-Wort-Sätze", "zeigt mehr eigenes Spiel oder Imitation"],
+  },
+  {
+    age: "3 Jahre",
+    items: ["läuft und klettert", "spricht in kurzen Sätzen", "spielt Rollenspiele", "versteht einfache Regeln", "kann einfache Dinge selbst machen"],
+  },
+  {
+    age: "WHO grobmotorische Bereiche",
+    items: [
+      "freies Sitzen beobachtet (ca. 3,8-9,2 Monate)",
+      "Krabbeln auf Händen und Knien beobachtet (ca. 5,2-13,5 Monate)",
+      "freies Stehen beobachtet (ca. 6,9-16,9 Monate)",
+      "freies Laufen beobachtet (ca. 8,2-17,6 Monate)",
+    ],
+  },
 ];
 
 const navItems = [
@@ -133,6 +186,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(7, 10, -2), 115, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(12, 0, -2), 125, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(18, 0, -2), 115, "ml", { completion: "ja", spitUp: "wenig", milkType: "Pre" }),
+    entry("milestone", at(11, 45, -2), undefined, undefined, { milestones: ["6 Monate: greift gezielter nach Dingen", "6 Monate: reagiert auf Ansprache"] }, "neue Fähigkeiten beobachtet"),
     entry("diaper", at(7, 55, -2), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(15, 45, -2), undefined, undefined, { wet: true, wetAmount: "viel", stool: false }),
     entry("observation", at(13, 25, -2), undefined, undefined, { categories: ["Verhalten: ungewöhnlich schläfrig"], severity: "leicht", duration: "nach dem Trinken" }, "längerer Mittagsschlaf"),
@@ -252,6 +306,7 @@ function renderDashboard() {
   const latestFeeding = latest(state.entries.filter((entry) => entry.type === "feeding"));
   const latestWeight = latest(measurements("weight"));
   const latestObservation = latest(state.entries.filter((entry) => entry.type === "observation"));
+  const latestMilestone = latest(state.entries.filter((entry) => entry.type === "milestone"));
   const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
   const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
   const avgMl = feedings.length ? Math.round(totalMl / feedings.length) : null;
@@ -267,6 +322,7 @@ function renderDashboard() {
   if (latestWeight) cards.push(statCard("Letztes Gewicht", formatValue(latestWeight), dateTimeText(latestWeight.timestamp), "scale"));
   dashboardMeasurementCards().forEach((card) => cards.push(card));
   if (latestObservation) cards.push(statCard("Letzte Beobachtung", firstLine(latestObservation.notes || categoriesText(latestObservation)), dateTimeText(latestObservation.timestamp), "eye"));
+  if (latestMilestone) cards.push(statCard("Letzter Meilenstein", milestoneText(latestMilestone), dateTimeText(latestMilestone.timestamp), "flag"));
   if (latestFinding) cards.push(statCard("Letzter Arztbefund", firstLine(latestFinding.data?.assessment || latestFinding.notes || latestFinding.data?.findingType || "Dokumentiert"), dateTimeText(latestFinding.timestamp), "stethoscope"));
 
   return `
@@ -340,6 +396,7 @@ function renderTimeline() {
           ["measurement:length", "Körperlänge"],
           ["measurement:temperature", "Temperatur"],
           ["observation", "Beobachtungen"],
+          ["milestone", "Meilensteine"],
           ["medication", "Medikamente"],
           ["medical_finding", "Arztbefunde"],
         ].map(([id, label]) => `<button class="chip ${timelineFilter === id ? "active" : ""}" type="button" data-filter="${id}">${label}</button>`).join("")}
@@ -605,6 +662,13 @@ function renderFormFields(choice, entry) {
       ${notesField(notes)}`;
   }
 
+  if (choice.id === "milestone") {
+    return `${base}
+      <div class="empty">Orientierung, keine Prüfung. Nur eintragen, wenn beobachtet.</div>
+      ${renderMilestoneGroups(data.milestones || [])}
+      ${notesField(notes)}`;
+  }
+
   if (choice.id === "medication") {
     return `${base}
       <div class="field"><label for="medName">Name <span>Optional</span></label><input id="medName" name="medName" value="${escapeAttr(data.name || "")}" /></div>
@@ -745,6 +809,20 @@ function renderObservationCategories(selected, selectedNotes = {}) {
         ${options.map((option) => `<label><input type="checkbox" name="categories" value="${escapeAttr(`${group}: ${option}`)}" ${selected.includes(`${group}: ${option}`) ? "checked" : ""} /> ${option}</label>`).join("")}
       </div>
       <div class="field compact-field"><label for="category-${slugify(group)}">Notiz zu ${group} <span>Optional</span></label><input id="category-${slugify(group)}" name="categoryNote:${escapeAttr(group)}" value="${escapeAttr(selectedNotes[group] || "")}" /></div>
+    </section>
+  `).join("");
+}
+
+function renderMilestoneGroups(selected) {
+  return milestoneGroups.map((group) => `
+    <section class="checkbox-section">
+      <h3>${escapeHtml(group.age)}</h3>
+      <div class="checkbox-grid">
+        ${group.items.map((item) => {
+          const value = `${group.age}: ${item}`;
+          return `<label><input type="checkbox" name="milestones" value="${escapeAttr(value)}" ${selected.includes(value) ? "checked" : ""} /> ${escapeHtml(item)}</label>`;
+        }).join("")}
+      </div>
     </section>
   `).join("");
 }
@@ -959,6 +1037,9 @@ function dataForChoice(choice, formData) {
     data.severity = formData.get("severity") || undefined;
     data.duration = cleanString(formData.get("duration"));
   }
+  if (choice.id === "milestone") {
+    data.milestones = formData.getAll("milestones");
+  }
   if (choice.id === "medication") {
     data.name = cleanString(formData.get("medName"));
     data.dose = cleanString(formData.get("dose"));
@@ -1053,6 +1134,7 @@ function exportSeparateCsvs() {
     "diapers.csv": (entry) => entry.type === "diaper",
     "measurements.csv": (entry) => entry.type === "measurement",
     "observations.csv": (entry) => entry.type === "observation",
+    "milestones.csv": (entry) => entry.type === "milestone",
     "medications.csv": (entry) => entry.type === "medication",
     "medical_findings.csv": (entry) => entry.type === "medical_finding",
     "notes.csv": (entry) => entry.type === "note",
@@ -1118,7 +1200,7 @@ function entriesFromCsv(text) {
 }
 
 function normalizeImportedEntry(row) {
-  const allowedTypes = new Set(["feeding", "diaper", "measurement", "observation", "medication", "medical_finding", "appointment", "note"]);
+  const allowedTypes = new Set(["feeding", "diaper", "measurement", "observation", "milestone", "medication", "medical_finding", "appointment", "note"]);
   const type = row.type?.trim();
   const timestamp = row.timestamp?.trim();
   if (!allowedTypes.has(type) || !timestamp || Number.isNaN(new Date(timestamp).getTime())) return null;
@@ -1496,6 +1578,7 @@ function detailForEntry(entry) {
   if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
   if (entry.type === "observation") return [categoriesText(entry), entry.data?.severity, entry.data?.duration].filter(Boolean).join(" · ") || firstLine(entry.notes || "Beobachtung");
+  if (entry.type === "milestone") return [milestoneText(entry), firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit, entry.data?.given === false ? "nicht gegeben" : "gegeben"].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
   return [firstLine(entry.notes || "Freie Notiz"), entry.data?.attachment ? "Anhang" : ""].filter(Boolean).join(" · ");
@@ -1503,6 +1586,13 @@ function detailForEntry(entry) {
 
 function categoriesText(entry) {
   return (entry.data?.categories || []).map((item) => item.split(": ").pop()).slice(0, 2).join(", ");
+}
+
+function milestoneText(entry) {
+  const milestones = entry.data?.milestones || [];
+  if (!milestones.length) return "";
+  const preview = milestones.map((item) => item.split(": ").pop()).slice(0, 2).join(", ");
+  return milestones.length > 2 ? `${preview} +${milestones.length - 2}` : preview;
 }
 
 function choiceForEntry(entry) {
@@ -1628,6 +1718,7 @@ function icon(name) {
     heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 8.5c0 5-8 10.5-8 10.5S4 13.5 4 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8 2.5z"/><path d="M7 12h3l1-2 2 5 1-3h3"/></svg>`,
     lungs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4v16M12 10c-5-5-8-2-8 4v4c4 1 7-1 8-5M12 10c5-5 8-2 8 4v4c-4 1-7-1-8-5"/></svg>`,
     eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    flag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V4M6 5h11l-1.8 4L17 13H6"/><path d="M6 13h8"/></svg>`,
     pill: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 21 3 14a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7zM8 9l7 7"/></svg>`,
     stethoscope: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 4v5a4 4 0 0 0 8 0V4M4 4h4M12 4h4M10 15a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="10" r="2"/></svg>`,
     note: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 3h11l3 3v15H5zM16 3v4h4M8 12h8M8 16h6"/></svg>`,
