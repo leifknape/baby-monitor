@@ -647,6 +647,70 @@ button {
   gap: 7px;
 }
 
+.development-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.development-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.development-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.development-title {
+  font-weight: 850;
+}
+
+.development-count {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.development-icon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-soft);
+  color: var(--accent-strong);
+}
+
+.development-items {
+  display: grid;
+  gap: 7px;
+}
+
+.development-item {
+  display: grid;
+  gap: 2px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.development-item span {
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.development-item small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .achievement-list {
   display: grid;
   gap: 8px;

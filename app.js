@@ -430,6 +430,7 @@ function renderEntryRow(entry) {
 function renderAnalytics() {
   const sections = [
     renderGrowthCharts(),
+    renderDevelopmentProfile(),
     renderFeedingCharts(),
     renderDiaperCharts(),
     renderMilestoneAchievements(),
@@ -446,6 +447,49 @@ function renderAnalytics() {
         ${sections.length ? sections.join("") : `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`}
       </div>
     </section>
+  `;
+}
+
+function renderDevelopmentProfile() {
+  const achievements = milestoneAchievements();
+  if (!achievements.length) return "";
+  const byArea = new Map();
+  achievements.forEach((achievement) => {
+    const area = achievement.area;
+    byArea.set(area, [...(byArea.get(area) || []), achievement]);
+  });
+  const areas = [...byArea.entries()]
+    .map(([area, items]) => ({ area, items: items.sort((a, b) => new Date(b.entry.timestamp) - new Date(a.entry.timestamp)) }))
+    .sort((a, b) => b.items.length - a.items.length);
+
+  return `
+    <article class="chart-card">
+      <div class="chart-title stacked">
+        <span>Entwicklungsprofil</span>
+        <small>Nur dokumentierte Fähigkeiten, ohne Bewertung.</small>
+      </div>
+      <div class="development-grid">
+        ${areas.map(({ area, items }) => `
+          <section class="development-card">
+            <div class="development-head">
+              <div>
+                <div class="development-title">${escapeHtml(area)}</div>
+                <div class="development-count">${items.length} dokumentiert</div>
+              </div>
+              <div class="development-icon">${icon(developmentAreaIcon(area))}</div>
+            </div>
+            <div class="development-items">
+              ${items.slice(0, 3).map((item) => `
+                <div class="development-item">
+                  <span>${escapeHtml(item.label)}</span>
+                  <small>${escapeHtml(item.age)} · ${shortDateText(item.entry.timestamp)}</small>
+                </div>
+              `).join("")}
+            </div>
+          </section>
+        `).join("")}
+      </div>
+    </article>
   `;
 }
 
@@ -489,14 +533,7 @@ function renderDiaperCharts() {
 }
 
 function renderMilestoneAchievements() {
-  const achievements = state.entries
-    .filter((entry) => entry.type === "milestone")
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .flatMap((entry) => (entry.data?.milestones || []).map((milestone) => ({
-      entry,
-      age: milestone.includes(": ") ? milestone.split(": ")[0] : "Meilenstein",
-      label: milestone.includes(": ") ? milestone.split(": ").slice(1).join(": ") : milestone,
-    })));
+  const achievements = milestoneAchievements();
   if (!achievements.length) return "";
   return `
     <article class="chart-card">
@@ -1358,6 +1395,48 @@ function dailyCounts(entries, reducer) {
   return [...groups.entries()].map(([label, items]) => ({ label, value: reducer(items) })).slice(-7);
 }
 
+function milestoneAchievements() {
+  return state.entries
+    .filter((entry) => entry.type === "milestone")
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .flatMap((entry) => (entry.data?.milestones || []).map((milestone) => {
+      const parsed = parseMilestone(milestone);
+      return {
+        entry,
+        ...parsed,
+        area: developmentAreaFor(parsed.label),
+      };
+    }));
+}
+
+function parseMilestone(milestone) {
+  if (!milestone.includes(": ")) return { age: "Meilenstein", label: milestone };
+  const [age, ...rest] = milestone.split(": ");
+  return { age, label: rest.join(": ") };
+}
+
+function developmentAreaFor(label) {
+  const text = label.toLowerCase();
+  if (["kopf", "bauchlage", "stützt", "dreht", "sitzt", "robbt", "krabbelt", "hoch", "steht", "schritte", "läuft", "rennt", "klettert", "ball", "sitzen", "stehen", "laufen"].some((word) => text.includes(word))) return "Motorik";
+  if (["wörter", "mama", "papa", "sätze", "aufforderungen", "ansprache", "stimme", "namen"].some((word) => text.includes(word))) return "Sprache & Verstehen";
+  if (["lächeln", "schaut euch", "guck-guck", "fremdelt", "gestikuliert", "zeigt"].some((word) => text.includes(word))) return "Kontakt & Sozial";
+  if (["gesichter", "geräusche", "augen", "hände", "greift", "dinge", "mund", "spielt", "rollenspiele", "türme", "imitiert"].some((word) => text.includes(word))) return "Wahrnehmung & Spiel";
+  if (["selbst", "regeln", "tätigkeiten"].some((word) => text.includes(word))) return "Alltag & Selbstständigkeit";
+  return "Weitere Fähigkeiten";
+}
+
+function developmentAreaIcon(area) {
+  const icons = {
+    "Motorik": "activity",
+    "Sprache & Verstehen": "chat",
+    "Kontakt & Sozial": "heart",
+    "Wahrnehmung & Spiel": "eye",
+    "Alltag & Selbstständigkeit": "home",
+    "Weitere Fähigkeiten": "flag",
+  };
+  return icons[area] || "flag";
+}
+
 function countBy(entries, getKey) {
   const groups = new Map();
   entries.forEach((entry) => {
@@ -1737,6 +1816,8 @@ function icon(name) {
     drop: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3s7 7 7 12a7 7 0 0 1-14 0c0-5 7-12 7-12z"/><path d="M9 14h6"/></svg>`,
     heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 8.5c0 5-8 10.5-8 10.5S4 13.5 4 8.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8 2.5z"/><path d="M7 12h3l1-2 2 5 1-3h3"/></svg>`,
     lungs: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 4v16M12 10c-5-5-8-2-8 4v4c4 1 7-1 8-5M12 10c5-5 8-2 8 4v4c-4 1-7-1-8-5"/></svg>`,
+    activity: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 13h4l2-6 4 12 2-6h4"/></svg>`,
+    chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 5h14v10H9l-4 4z"/><path d="M8 9h8M8 12h5"/></svg>`,
     eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
     flag: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 21V4M6 5h11l-1.8 4L17 13H6"/><path d="M6 13h8"/></svg>`,
     pill: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 21 3 14a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7zM8 9l7 7"/></svg>`,
