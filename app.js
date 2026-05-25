@@ -106,6 +106,7 @@ function defaultState() {
       darkMode: true,
       growthReferenceSource: "who",
       growthReferenceSex: "none",
+      uHeftQuestions: ["Gibt es etwas, das wir bis zur nächsten U beobachten sollen?"],
       demoVersion: DEMO_VERSION,
     },
   };
@@ -431,6 +432,7 @@ function renderAnalytics() {
   const sections = [
     renderGrowthCharts(),
     renderDevelopmentProfile(),
+    renderUHeftCompanion(),
     renderFeedingCharts(),
     renderDiaperCharts(),
     renderMilestoneAchievements(),
@@ -488,6 +490,59 @@ function renderDevelopmentProfile() {
             </div>
           </section>
         `).join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderUHeftCompanion() {
+  const nextExam = nextUHeftExam();
+  const recentSince = new Date();
+  recentSince.setDate(recentSince.getDate() - 30);
+  const latestGrowth = [
+    latest(measurements("weight")),
+    latest(measurements("head")),
+    latest(measurements("length")),
+  ].filter(Boolean);
+  const recentMilestones = state.entries.filter((entry) => entry.type === "milestone" && new Date(entry.timestamp) >= recentSince);
+  const recentObservations = state.entries.filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince);
+  const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
+  const questions = state.settings.uHeftQuestions || [];
+
+  return `
+    <article class="chart-card">
+      <div class="chart-title stacked">
+        <span>U-Heft-Begleiter</span>
+        <small>Vorbereitung für das Gespräch, ohne Bewertung.</small>
+      </div>
+      <div class="uheft-panel">
+        <div class="uheft-next">
+          <div>
+            <div class="uheft-label">Nächste Orientierung</div>
+            <div class="uheft-title">${escapeHtml(nextExam.name)}</div>
+            <div class="uheft-meta">${escapeHtml(nextExam.window)} · ${escapeHtml(nextExam.status)}</div>
+          </div>
+          <div class="uheft-icon">${icon("note")}</div>
+        </div>
+        <div class="uheft-summary">
+          ${latestGrowth.length ? `<div><strong>Letzte Wachstumswerte</strong><span>${latestGrowth.map(formatValue).filter(Boolean).join(" · ")}</span></div>` : ""}
+          ${recentMilestones.length ? `<div><strong>Meilensteine</strong><span>${recentMilestones.length} in den letzten 30 Tagen dokumentiert</span></div>` : ""}
+          ${recentObservations.length ? `<div><strong>Beobachtungen</strong><span>${recentObservations.length} in den letzten 30 Tagen dokumentiert</span></div>` : ""}
+          ${latestFinding ? `<div><strong>Letzter Arztbefund</strong><span>${escapeHtml(dateTimeText(latestFinding.timestamp))}</span></div>` : ""}
+        </div>
+        <div class="uheft-questions">
+          <div class="uheft-label">Fragen für das Gespräch</div>
+          ${questions.length ? questions.map((question, index) => `
+            <div class="uheft-question">
+              <span>${escapeHtml(question)}</span>
+              <button class="icon-button compact" type="button" title="Frage entfernen" data-action="remove-uheft-question" data-index="${index}">${icon("close")}</button>
+            </div>
+          `).join("") : `<div class="empty">Noch keine Fragen notiert.</div>`}
+          <div class="uheft-add">
+            <input id="uheft-question" placeholder="Frage notieren" />
+            <button class="text-button" type="button" data-action="add-uheft-question">Hinzufügen</button>
+          </div>
+        </div>
       </div>
     </article>
   `;
@@ -970,6 +1025,8 @@ function bindEvents() {
     "refresh-app": refreshApp,
     "load-demo": loadDemoData,
     "remove-demo": removeDemoData,
+    "add-uheft-question": addUHeftQuestion,
+    "remove-uheft-question": removeUHeftQuestion,
     "export-long": exportLongCsv,
     "export-separate": exportSeparateCsvs,
   };
@@ -1158,6 +1215,22 @@ function saveSettings() {
   state.settings.growthReferenceSex = document.getElementById("growth-reference-sex").value;
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
+  saveState();
+  render();
+}
+
+function addUHeftQuestion() {
+  const input = document.getElementById("uheft-question");
+  const question = cleanString(input?.value);
+  if (!question) return;
+  state.settings.uHeftQuestions = [...(state.settings.uHeftQuestions || []), question];
+  saveState();
+  render();
+}
+
+function removeUHeftQuestion(event) {
+  const index = Number(event.currentTarget.dataset.index);
+  state.settings.uHeftQuestions = (state.settings.uHeftQuestions || []).filter((_, itemIndex) => itemIndex !== index);
   saveState();
   render();
 }
@@ -1390,6 +1463,38 @@ function latestMeasurementSummary() {
 
 function latest(entries) {
   return [...entries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+}
+
+function nextUHeftExam() {
+  const ageDays = childAgeDays();
+  const schedule = [
+    { name: "U1", window: "direkt nach Geburt", start: 0, end: 1 },
+    { name: "U2", window: "3.-10. Lebenstag", start: 3, end: 10 },
+    { name: "U3", window: "4.-5. Lebenswoche", start: 28, end: 35 },
+    { name: "U4", window: "3.-4. Lebensmonat", start: 91, end: 122 },
+    { name: "U5", window: "6.-7. Lebensmonat", start: 183, end: 213 },
+    { name: "U6", window: "10.-12. Lebensmonat", start: 304, end: 365 },
+    { name: "U7", window: "21.-24. Lebensmonat", start: 640, end: 730 },
+    { name: "U7a", window: "34.-36. Lebensmonat", start: 1035, end: 1095 },
+    { name: "U8", window: "46.-48. Lebensmonat", start: 1400, end: 1460 },
+    { name: "U9", window: "60.-64. Lebensmonat", start: 1826, end: 1948 },
+  ];
+  const exam = schedule.find((item) => ageDays <= item.end);
+  if (!exam) return { name: "U1-U9", window: "Gelbes Heft", status: "für dieses Alter liegen keine weiteren U1-U9-Fenster vor" };
+  if (ageDays >= exam.start) return { ...exam, status: "aktuell im Zeitraum" };
+  return { ...exam, status: `${formatDayDistance(exam.start - ageDays)} bis zum Zeitraum` };
+}
+
+function childAgeDays() {
+  const birth = new Date(state.child.birthDate);
+  if (Number.isNaN(birth.getTime())) return 0;
+  return Math.max(0, Math.floor((startOfDay(new Date()) - startOfDay(birth)) / (24 * 60 * 60 * 1000)));
+}
+
+function formatDayDistance(days) {
+  if (days < 14) return `${days} Tage`;
+  if (days < 70) return `${Math.round(days / 7)} Wochen`;
+  return `${Math.round(days / 30.4375)} Monate`;
 }
 
 function dailyCounts(entries, reducer) {
@@ -1826,6 +1931,7 @@ function icon(name) {
     moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18.8 14.3A7 7 0 0 1 9.7 5.2 7.4 7.4 0 1 0 18.8 14.3z"/></svg>`,
     sliders: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 5v4M8 15v4"/></svg>`,
     chevron: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 18 6-6-6-6"/></svg>`,
+    close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m7 7 10 10M17 7 7 17"/></svg>`,
     bottle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 2h6v4l-2 2v13H8V8L6 6V2h3M8 12h5M8 16h5"/></svg>`,
     diaper: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7h18v6a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7zM7 7v5M17 7v5M8 15h8"/></svg>`,
     scale: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M9 11a3 3 0 0 1 6 0M12 11l2-2"/></svg>`,
