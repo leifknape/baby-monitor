@@ -1,5 +1,5 @@
 const STORAGE_KEY = "baby-monitor-state-v1";
-const DEMO_VERSION = 4;
+const DEMO_VERSION = 5;
 
 const entryChoices = [
   { id: "feeding", label: "Trinken", type: "feeding", icon: "bottle" },
@@ -139,7 +139,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(15, 50, -6), 95, "ml", { completion: "teilweise", spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(8, 30, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(16, 10, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "weich" }),
-    entry("observation", at(18, 20, -6), undefined, undefined, { categories: ["Trinken: spuckt mehr"], severity: "leicht", duration: "kurz" }, "nach der Flasche etwas gespuckt"),
+    entry("observation", at(18, 20, -6), undefined, undefined, { categories: ["Trinken: spuckt mehr"], duration: "kurz" }, "nach der Flasche etwas gespuckt"),
     entry("measurement", at(9, 0, -6), 6140, "g", { kind: "weight" }),
     entry("measurement", at(9, 5, -6), 61.2, "cm", { kind: "length" }),
     entry("measurement", at(9, 8, -6), 39.4, "cm", { kind: "head" }),
@@ -164,7 +164,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(17, 35, -4), 110, "ml", { completion: "ja", spitUp: "wenig", milkType: "Pre" }),
     entry("diaper", at(7, 35, -4), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(14, 10, -4), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
-    entry("observation", at(16, 45, -4), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], severity: "mittel", duration: "ca. 30 Minuten" }, "abends unruhiger als sonst"),
+    entry("observation", at(16, 45, -4), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], duration: "ca. 30 Minuten" }, "abends unruhiger als sonst"),
     entry("medical_finding", at(9, 30, -4), undefined, undefined, { findingType: "Echo", place: "Kinderkardiologie", vmax: 2.1, gradient: 18, insufficiency: "gering", assessment: "Kontrolle dokumentiert, nächster Befund nach ärztlicher Absprache." }),
     entry("measurement", at(10, 0, -4), 6290, "g", { kind: "weight" }),
     entry("measurement", at(10, 5, -4), 61.5, "cm", { kind: "length" }),
@@ -189,7 +189,7 @@ function createDemoEntries(childId) {
     entry("milestone", at(11, 45, -2), undefined, undefined, { milestones: ["6 Monate: greift gezielter nach Dingen", "6 Monate: reagiert auf Ansprache"] }, "neue Fähigkeiten beobachtet"),
     entry("diaper", at(7, 55, -2), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(15, 45, -2), undefined, undefined, { wet: true, wetAmount: "viel", stool: false }),
-    entry("observation", at(13, 25, -2), undefined, undefined, { categories: ["Verhalten: ungewöhnlich schläfrig"], severity: "leicht", duration: "nach dem Trinken" }, "längerer Mittagsschlaf"),
+    entry("observation", at(13, 25, -2), undefined, undefined, { categories: ["Verhalten: ungewöhnlich schläfrig"], duration: "nach dem Trinken" }, "längerer Mittagsschlaf"),
     entry("measurement", at(10, 0, -2), 6370, "g", { kind: "weight" }),
     entry("measurement", at(10, 4, -2), 61.8, "cm", { kind: "length" }),
     entry("measurement", at(10, 7, -2), 39.9, "cm", { kind: "head" }),
@@ -201,7 +201,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(21, 0, -1), 115, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(9, 10, -1), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(18, 45, -1), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "weich" }),
-    entry("observation", at(19, 15, -1), undefined, undefined, { categories: ["Sonstiges: anderes"], severity: "leicht" }, "lange wach, danach gut eingeschlafen"),
+    entry("observation", at(19, 15, -1), undefined, undefined, { categories: ["Sonstiges: anderes"] }, "lange wach, danach gut eingeschlafen"),
     entry("medical_finding", at(10, 15, -1), undefined, undefined, { findingType: "Arztgespräch", place: "Praxis", vmax: 2.0, gradient: 16, insufficiency: "gering", assessment: "Besprochener Verlauf dokumentiert." }),
     entry("measurement", at(8, 30, -1), 6400, "g", { kind: "weight" }),
     entry("measurement", at(8, 34, -1), 61.9, "cm", { kind: "length" }),
@@ -212,7 +212,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(6, 10), 95, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }, "ruhig getrunken"),
     entry("diaper", at(7, 5), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }, "morgens"),
     entry("feeding", at(10, 20), 110, "ml", { completion: "teilweise", spitUp: "wenig", milkType: "Pre" }),
-    entry("observation", at(12, 15), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], severity: "leicht", duration: "ca. 20 Minuten" }, "nach dem Mittagsschlaf wieder zufrieden"),
+    entry("observation", at(12, 15), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], duration: "ca. 20 Minuten" }, "nach dem Mittagsschlaf wieder zufrieden"),
     entry("diaper", at(13, 40), undefined, undefined, { wet: true, wetAmount: "viel", stool: true, stoolColor: "gelb", consistency: "weich" }),
     entry("feeding", at(15, 30), 120, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("measurement", at(17, 0), 6450, "g", { kind: "weight" }, "zu Hause gewogen"),
@@ -432,6 +432,7 @@ function renderAnalytics() {
     renderGrowthCharts(),
     renderFeedingCharts(),
     renderDiaperCharts(),
+    renderMilestoneAchievements(),
     renderVitalCharts(),
   ].filter(Boolean);
 
@@ -487,11 +488,32 @@ function renderDiaperCharts() {
   return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>Einträge pro Tag</span></div>${barChart(byDay, "")}</article>`;
 }
 
-function renderObservationCharts() {
-  const observations = state.entries.filter((entry) => entry.type === "observation");
-  if (!observations.length) return "";
-  const bySeverity = countBy(observations, (entry) => entry.data?.severity || "nicht angegeben");
-  return `<article class="chart-card"><div class="chart-title"><span>Beobachtungen</span><span>Nach Schweregrad</span></div>${barChart(bySeverity, "")}</article>`;
+function renderMilestoneAchievements() {
+  const achievements = state.entries
+    .filter((entry) => entry.type === "milestone")
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .flatMap((entry) => (entry.data?.milestones || []).map((milestone) => ({
+      entry,
+      age: milestone.includes(": ") ? milestone.split(": ")[0] : "Meilenstein",
+      label: milestone.includes(": ") ? milestone.split(": ").slice(1).join(": ") : milestone,
+    })));
+  if (!achievements.length) return "";
+  return `
+    <article class="chart-card">
+      <div class="chart-title"><span>Meilensteine</span><span>${achievements.length} erreicht</span></div>
+      <div class="achievement-list">
+        ${achievements.map((achievement) => `
+          <div class="achievement-item">
+            <div class="achievement-icon">${icon("flag")}</div>
+            <div>
+              <div class="achievement-title">${escapeHtml(achievement.label)}</div>
+              <div class="achievement-meta">${escapeHtml(achievement.age)} · ${dateTimeText(achievement.entry.timestamp)}</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `;
 }
 
 function renderVitalCharts() {
@@ -656,7 +678,6 @@ function renderFormFields(choice, entry) {
   if (choice.id === "observation") {
     return `${base}
       ${renderObservationCategories(data.categories || [], data.categoryNotes || {})}
-      ${radioGroup("severity", "Schweregrad", ["leicht", "mittel", "stark"], data.severity || "leicht")}
       <div class="field"><label for="duration">Dauer <span>Optional</span></label><input id="duration" name="duration" value="${escapeAttr(data.duration || "")}" /></div>
       <div class="field"><label for="photo">Foto <span>Optional</span></label><input id="photo" name="photo" type="file" accept="image/*" /></div>
       ${notesField(notes)}`;
@@ -1034,7 +1055,6 @@ function dataForChoice(choice, formData) {
   if (choice.id === "observation") {
     data.categories = formData.getAll("categories");
     data.categoryNotes = categoryNotesFromForm(formData);
-    data.severity = formData.get("severity") || undefined;
     data.duration = cleanString(formData.get("duration"));
   }
   if (choice.id === "milestone") {
@@ -1577,7 +1597,7 @@ function detailForEntry(entry) {
   if (entry.type === "feeding") return [formatValue(entry), entry.data?.milkType, entry.data?.completion].filter(Boolean).join(" · ") || "Trinken";
   if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
-  if (entry.type === "observation") return [categoriesText(entry), entry.data?.severity, entry.data?.duration].filter(Boolean).join(" · ") || firstLine(entry.notes || "Beobachtung");
+  if (entry.type === "observation") return [categoriesText(entry), entry.data?.duration].filter(Boolean).join(" · ") || firstLine(entry.notes || "Beobachtung");
   if (entry.type === "milestone") return [milestoneText(entry), firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit, entry.data?.given === false ? "nicht gegeben" : "gegeben"].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
