@@ -438,9 +438,20 @@ function renderObservationCharts() {
 }
 
 function renderVitalCharts() {
-  const values = measurements("temperature");
-  if (values.length < 2) return "";
-  return `<article class="chart-card"><div class="chart-title"><span>Temperatur</span><span>Nur eintragen, wenn gemessen</span></div>${lineChart("Temperatur", values, "°C", { showPointLabels: true, showTimeAxis: true })}</article>`;
+  const cards = [];
+  const temperature = measurements("temperature");
+  const spo2 = measurements("spo2");
+  const heartRate = measurements("heart_rate");
+  if (temperature.length >= 2) {
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Temperatur</span><span>Nur eintragen, wenn gemessen</span></div>${lineChart("Temperatur", temperature, "°C", { showPointLabels: true, showTimeAxis: true })}</article>`);
+  }
+  if (spo2.length >= 2) {
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Sauerstoffsättigung</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Sauerstoffsättigung", spo2, "%")}</article>`);
+  }
+  if (heartRate.length >= 2) {
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}</article>`);
+  }
+  return cards.join("");
 }
 
 function renderSettings() {
@@ -1316,6 +1327,63 @@ function lineChart(title, entries, unit, options = {}) {
         ${options.showPointLabels ? points.map(([x, y, entry, index]) => `<text class="point-label" x="${x.toFixed(1)}" y="${Math.max(16, y - 10).toFixed(1)}" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(chartPointValue(entry, unit))}</text>`).join("") : ""}
         ${options.showTimeAxis ? points.map(([x, , entry, index]) => `<text class="axis-label" x="${x.toFixed(1)}" y="164" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(shortDateText(entry.timestamp))}</text>`).join("") : ""}
         ${options.showTimeAxis ? "" : `<text class="unit-label" x="${xStart}" y="176">${escapeHtml(unit)}</text>`}
+      </svg>
+    </div>
+  `;
+}
+
+function rangeChart(title, entries, unit) {
+  if (entries.length < 2) return `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`;
+  const ranges = entries.map((entry) => {
+    const fallback = Number(entry.value);
+    const low = Number(entry.data?.min ?? fallback);
+    const high = Number(entry.data?.max ?? fallback);
+    return {
+      entry,
+      low: Math.min(low, high),
+      high: Math.max(low, high),
+      time: new Date(entry.timestamp).getTime(),
+    };
+  }).filter((item) => Number.isFinite(item.low) && Number.isFinite(item.high) && Number.isFinite(item.time));
+  if (ranges.length < 2) return `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`;
+
+  const minTime = Math.min(...ranges.map((item) => item.time));
+  const maxTime = Math.max(...ranges.map((item) => item.time));
+  const timeRange = maxTime - minTime || 1;
+  const min = Math.min(...ranges.map((item) => item.low));
+  const max = Math.max(...ranges.map((item) => item.high));
+  const padding = (max - min) * 0.18 || 1;
+  const yMin = min - padding;
+  const yMax = max + padding;
+  const range = yMax - yMin || 1;
+  const width = 420;
+  const xStart = 12;
+  const xEnd = width - 12;
+  const xForTime = (timestamp, index = 0) => ranges.length > 2 || timeRange > 1
+    ? xStart + ((timestamp - minTime) / timeRange) * (xEnd - xStart)
+    : xStart + (index / (ranges.length - 1)) * (xEnd - xStart);
+  const yForValue = (value) => 126 - ((value - yMin) / range) * 86;
+  const points = ranges.map((item, index) => ({
+    ...item,
+    index,
+    x: xForTime(item.time, index),
+    yLow: yForValue(item.low),
+    yHigh: yForValue(item.high),
+  }));
+  const lowPath = points.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.yLow.toFixed(1)}`).join(" ");
+  const highPath = points.map((point, index) => `${index ? "L" : "M"} ${point.x.toFixed(1)} ${point.yHigh.toFixed(1)}`).join(" ");
+  const latest = points.at(-1);
+  return `
+    <div class="chart-frame">
+      <svg class="line-chart range-chart" viewBox="0 0 ${width} 180" role="img" aria-label="${title}">
+        <line class="axis-line" x1="${xStart}" y1="140" x2="${xEnd}" y2="140"></line>
+        ${points.map((point) => `<line class="range-connector" x1="${point.x.toFixed(1)}" y1="${point.yHigh.toFixed(1)}" x2="${point.x.toFixed(1)}" y2="${point.yLow.toFixed(1)}"></line>`).join("")}
+        <path class="range-line high" d="${highPath}"></path>
+        <path class="range-line low" d="${lowPath}"></path>
+        ${points.map((point) => `<circle class="range-point high" cx="${point.x.toFixed(1)}" cy="${point.yHigh.toFixed(1)}" r="3.5"></circle><circle class="range-point low" cx="${point.x.toFixed(1)}" cy="${point.yLow.toFixed(1)}" r="3.5"></circle>`).join("")}
+        <text class="point-label" x="${latest.x.toFixed(1)}" y="${Math.max(16, latest.yHigh - 10).toFixed(1)}" text-anchor="end">${escapeHtml(`${latest.high} ${unit}`)}</text>
+        <text class="point-label" x="${latest.x.toFixed(1)}" y="${Math.min(136, latest.yLow + 16).toFixed(1)}" text-anchor="end">${escapeHtml(`${latest.low} ${unit}`)}</text>
+        ${points.map((point) => `<text class="axis-label" x="${point.x.toFixed(1)}" y="164" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(shortDateText(point.entry.timestamp))}</text>`).join("")}
       </svg>
     </div>
   `;
