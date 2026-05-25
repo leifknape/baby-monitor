@@ -1,4 +1,4 @@
-const CACHE_NAME = "baby-monitor-v11";
+const CACHE_NAME = "baby-monitor-v12";
 const APP_SHELL = [
   "./",
   "./index.html",

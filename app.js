@@ -544,7 +544,8 @@ function renderMilestoneAchievements() {
             <div class="achievement-icon">${icon("flag")}</div>
             <div>
               <div class="achievement-title">${escapeHtml(achievement.label)}</div>
-              <div class="achievement-meta">${escapeHtml(achievement.age)} · ${dateTimeText(achievement.entry.timestamp)}</div>
+              <div class="achievement-meta">${escapeHtml(achievementStatusText(achievement))}</div>
+              ${achievement.entry.notes ? `<div class="achievement-note">${escapeHtml(firstLine(achievement.entry.notes))}</div>` : ""}
             </div>
           </div>
         `).join("")}
@@ -723,7 +724,10 @@ function renderFormFields(choice, entry) {
   if (choice.id === "milestone") {
     return `${base}
       <div class="empty">Orientierung, keine Prüfung. Nur eintragen, wenn beobachtet.</div>
+      ${radioGroup("milestoneStatus", "Status", ["erstmals beobachtet", "erneut beobachtet"], data.status || "erstmals beobachtet")}
+      ${selectField("milestoneSituation", "Situation Optional", ["", "Spiel", "Bauchlage", "Sitzen", "Unterwegs", "beim Wickeln", "beim Essen", "mit Familie", "sonstiges"], data.situation)}
       ${renderMilestoneGroups(data.milestones || [])}
+      <div class="field"><label for="photo">Foto <span>Optional</span></label><input id="photo" name="photo" type="file" accept="image/*" /></div>
       ${notesField(notes)}`;
   }
 
@@ -1096,6 +1100,8 @@ function dataForChoice(choice, formData) {
   }
   if (choice.id === "milestone") {
     data.milestones = formData.getAll("milestones");
+    data.status = formData.get("milestoneStatus") || undefined;
+    data.situation = cleanString(formData.get("milestoneSituation"));
   }
   if (choice.id === "medication") {
     data.name = cleanString(formData.get("medName"));
@@ -1405,8 +1411,21 @@ function milestoneAchievements() {
         entry,
         ...parsed,
         area: developmentAreaFor(parsed.label),
+        status: entry.data?.status || "erstmals beobachtet",
+        situation: entry.data?.situation || "",
+        hasAttachment: Boolean(entry.data?.attachment),
       };
     }));
+}
+
+function achievementStatusText(achievement) {
+  return [
+    achievement.age,
+    achievement.status,
+    achievement.situation,
+    dateTimeText(achievement.entry.timestamp),
+    achievement.hasAttachment ? "Foto" : "",
+  ].filter(Boolean).join(" · ");
 }
 
 function parseMilestone(milestone) {
@@ -1677,7 +1696,7 @@ function detailForEntry(entry) {
   if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
   if (entry.type === "observation") return [categoriesText(entry), entry.data?.duration].filter(Boolean).join(" · ") || firstLine(entry.notes || "Beobachtung");
-  if (entry.type === "milestone") return [milestoneText(entry), firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
+  if (entry.type === "milestone") return [milestoneText(entry), entry.data?.status, entry.data?.situation, entry.data?.attachment ? "Foto" : "", firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit, entry.data?.given === false ? "nicht gegeben" : "gegeben"].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
   return [firstLine(entry.notes || "Freie Notiz"), entry.data?.attachment ? "Anhang" : ""].filter(Boolean).join(" · ");
