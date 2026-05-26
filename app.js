@@ -296,6 +296,25 @@ function loadState() {
 
 function prepareState(source) {
   const fallbackChild = source.child || defaultState().child;
+  const sourceEntries = Array.isArray(source.entries) ? source.entries : [];
+  const entriesForChildId = (childId) => sourceEntries.filter((entry) => entry.childId === childId);
+  const hasEntriesForChildId = (childId) => entriesForChildId(childId).length > 0;
+  const isRecoveredChild = (child) => /^Gespeichertes Kind/.test(child.name || "");
+  const legacyCarrierChild = (Array.isArray(source.children) ? source.children.find((child) => child?.id && !isRecoveredChild(child) && !hasEntriesForChildId(child.id)) : null) || fallbackChild;
+  const legacySettings = {
+    ...defaultChildSettings(),
+    ...(source.settings || {}),
+    ...(legacyCarrierChild.settings || {}),
+  };
+  const legacyChildData = {
+    name: legacyCarrierChild.name,
+    birthDate: legacyCarrierChild.birthDate,
+    birthWeightGrams: legacyCarrierChild.birthWeightGrams,
+    birthLengthCm: legacyCarrierChild.birthLengthCm,
+    birthHeadCircumferenceCm: legacyCarrierChild.birthHeadCircumferenceCm,
+    settings: legacySettings,
+  };
+  const legacyChildName = legacyChildData.name && legacyChildData.name !== "Lina" ? legacyChildData.name : "";
   const rawChildren = (Array.isArray(source.children) && source.children.length ? source.children : [fallbackChild])
     .map((child) => ({
       ...child,
@@ -328,18 +347,41 @@ function prepareState(source) {
   });
   unknownChildIds
     .forEach((childId, index) => {
+      const shouldAdoptLegacyChild = unknownChildIds.length === 1 && !hasEntriesForChildId(fallbackChild.id);
       children.push({
         id: childId,
-        name: index === 0 ? "Gespeichertes Kind" : `Gespeichertes Kind ${index + 1}`,
-        birthDate: fallbackChild.birthDate || new Date().toISOString().slice(0, 10),
-        settings: { ...defaultChildSettings() },
+        name: shouldAdoptLegacyChild ? (legacyChildName || "Gespeichertes Kind") : (index === 0 ? "Gespeichertes Kind" : `Gespeichertes Kind ${index + 1}`),
+        birthDate: (shouldAdoptLegacyChild ? legacyChildData.birthDate : fallbackChild.birthDate) || new Date().toISOString().slice(0, 10),
+        ...(shouldAdoptLegacyChild && legacyChildData.birthWeightGrams !== undefined ? { birthWeightGrams: legacyChildData.birthWeightGrams } : {}),
+        ...(shouldAdoptLegacyChild && legacyChildData.birthLengthCm !== undefined ? { birthLengthCm: legacyChildData.birthLengthCm } : {}),
+        ...(shouldAdoptLegacyChild && legacyChildData.birthHeadCircumferenceCm !== undefined ? { birthHeadCircumferenceCm: legacyChildData.birthHeadCircumferenceCm } : {}),
+        settings: shouldAdoptLegacyChild ? { ...legacyChildData.settings } : { ...defaultChildSettings() },
       });
     });
+  const rescuedChildrenWithEntries = children.filter((child) => (isRecoveredChild(child) || unknownChildIds.includes(child.id)) && hasEntriesForChildId(child.id));
+  if (rescuedChildrenWithEntries.length === 1 && !hasEntriesForChildId(fallbackChild.id)) {
+    const recoveredChild = rescuedChildrenWithEntries[0];
+    Object.assign(recoveredChild, {
+      name: legacyChildName || recoveredChild.name,
+      birthDate: legacyChildData.birthDate || recoveredChild.birthDate,
+      ...(legacyChildData.birthWeightGrams !== undefined ? { birthWeightGrams: legacyChildData.birthWeightGrams } : {}),
+      ...(legacyChildData.birthLengthCm !== undefined ? { birthLengthCm: legacyChildData.birthLengthCm } : {}),
+      ...(legacyChildData.birthHeadCircumferenceCm !== undefined ? { birthHeadCircumferenceCm: legacyChildData.birthHeadCircumferenceCm } : {}),
+      settings: {
+        ...defaultChildSettings(),
+        ...(recoveredChild.settings || {}),
+        ...legacyChildData.settings,
+      },
+    });
+  }
+  const preferredActiveChildId = rescuedChildrenWithEntries.length === 1 && !hasEntriesForChildId(activeChildId)
+    ? rescuedChildrenWithEntries[0].id
+    : activeChildId;
   const prepared = {
     ...source,
     children,
-    activeChildId,
-    entries: Array.isArray(source.entries) ? source.entries.map((entry) => ({ ...entry, childId: entry.childId || activeChildId })) : [],
+    activeChildId: preferredActiveChildId,
+    entries: sourceEntries.map((entry) => ({ ...entry, childId: entry.childId || preferredActiveChildId })),
     settings: {
       darkMode: source.settings?.darkMode ?? true,
       explicitThemeChoice: source.settings?.explicitThemeChoice,
