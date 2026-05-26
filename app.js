@@ -296,7 +296,7 @@ function loadState() {
 
 function prepareState(source) {
   const fallbackChild = source.child || defaultState().child;
-  const children = (Array.isArray(source.children) && source.children.length ? source.children : [fallbackChild])
+  const rawChildren = (Array.isArray(source.children) && source.children.length ? source.children : [fallbackChild])
     .map((child) => ({
       ...child,
       id: child.id || crypto.randomUUID(),
@@ -308,13 +308,25 @@ function prepareState(source) {
         ...(child.settings || {}),
       },
     }));
+  const children = [];
+  const seenChildIds = new Set();
+  rawChildren.forEach((child) => {
+    if (seenChildIds.has(child.id)) return;
+    children.push(child);
+    seenChildIds.add(child.id);
+  });
   const activeChildId = source.activeChildId && children.some((child) => child.id === source.activeChildId)
     ? source.activeChildId
     : children[0].id;
   const knownChildIds = new Set(children.map((child) => child.id));
-  (source.entries || [])
-    .map((entry) => entry.childId)
-    .filter((childId) => childId && !knownChildIds.has(childId))
+  const unknownChildIds = [];
+  (source.entries || []).forEach((entry) => {
+    const childId = entry.childId;
+    if (!childId || knownChildIds.has(childId)) return;
+    knownChildIds.add(childId);
+    unknownChildIds.push(childId);
+  });
+  unknownChildIds
     .forEach((childId, index) => {
       children.push({
         id: childId,
@@ -322,7 +334,6 @@ function prepareState(source) {
         birthDate: fallbackChild.birthDate || new Date().toISOString().slice(0, 10),
         settings: { ...defaultChildSettings() },
       });
-      knownChildIds.add(childId);
     });
   const prepared = {
     ...source,
