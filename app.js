@@ -140,9 +140,10 @@ function defaultState() {
     child,
     children: [child],
     activeChildId: childId,
-    entries: createDemoEntries(childId),
+    entries: [],
     settings: {
       darkMode: true,
+      demoRemoved: true,
     },
   };
 }
@@ -287,20 +288,6 @@ function loadState() {
       settings: { ...fallback.settings, ...(parsed.settings || {}) },
     });
     if (!parsed.settings?.explicitThemeChoice) next.settings.darkMode = true;
-    const needsDemoRefresh = !next.settings.demoRemoved && (
-      !Array.isArray(activeEntries(next)) ||
-      activeEntries(next).length === 0 ||
-      (activeEntries(next).some((entry) => entry.data?.demo) && next.settings.demoVersion !== DEMO_VERSION)
-    );
-    if (needsDemoRefresh) {
-      const realEntries = Array.isArray(next.entries) ? next.entries.filter((entry) => entry.childId !== next.child.id || !entry.data?.demo) : [];
-      next.entries = [...realEntries, ...createDemoEntries(next.child.id)].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      next.settings.demoVersion = DEMO_VERSION;
-    }
-    if (!next.settings.demoRemoved && (!Array.isArray(next.entries) || activeEntries(next).length === 0)) {
-      next.entries = createDemoEntries(next.child.id);
-      next.settings.demoVersion = DEMO_VERSION;
-    }
     return next;
   } catch {
     return defaultState();
@@ -324,6 +311,19 @@ function prepareState(source) {
   const activeChildId = source.activeChildId && children.some((child) => child.id === source.activeChildId)
     ? source.activeChildId
     : children[0].id;
+  const knownChildIds = new Set(children.map((child) => child.id));
+  (source.entries || [])
+    .map((entry) => entry.childId)
+    .filter((childId) => childId && !knownChildIds.has(childId))
+    .forEach((childId, index) => {
+      children.push({
+        id: childId,
+        name: index === 0 ? "Gespeichertes Kind" : `Gespeichertes Kind ${index + 1}`,
+        birthDate: fallbackChild.birthDate || new Date().toISOString().slice(0, 10),
+        settings: { ...defaultChildSettings() },
+      });
+      knownChildIds.add(childId);
+    });
   const prepared = {
     ...source,
     children,
