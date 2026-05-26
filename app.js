@@ -989,6 +989,8 @@ function renderSettings() {
         <div class="field"><label for="due-date">Errechneter Geburtstermin <span>Optional</span></label><input id="due-date" type="date" value="${escapeAttr(state.settings.dueDate || "")}" /></div>
         <div class="empty">Korrigiertes Alter wird nur als Entwicklungs- und U-Heft-Orientierung angezeigt.</div>
         <button class="primary-button" type="button" data-action="save-child">Speichern</button>
+        <button class="danger-button" type="button" data-action="delete-child" ${state.children.length > 1 ? "" : "disabled"}>Dieses Kind löschen</button>
+        <div class="empty">Löscht dieses Kindprofil und die dazugehörigen Einträge nur nach Bestätigung. Mindestens ein Kindprofil bleibt erhalten.</div>
       </div>
       <div class="settings-card">
         <h3>App-Einstellungen</h3>
@@ -1384,6 +1386,7 @@ function bindEvents() {
   }
   const actions = {
     "save-child": saveChild,
+    "delete-child": deleteChild,
     "save-settings": saveSettings,
     "switch-child": switchChild,
     "add-child": addChild,
@@ -1614,6 +1617,23 @@ function addChild() {
   };
   state.children.push(child);
   state.activeChildId = child.id;
+  syncActiveChild();
+  saveState();
+  render();
+}
+
+function deleteChild() {
+  if (state.children.length <= 1) {
+    window.alert("Mindestens ein Kindprofil bleibt erhalten.");
+    return;
+  }
+  const child = state.child;
+  const entryCount = activeEntries().length;
+  const confirmed = window.confirm(`${child.name} löschen? Das Kindprofil und ${entryCount} dazugehörige Einträge werden lokal entfernt.`);
+  if (!confirmed) return;
+  state.children = state.children.filter((item) => item.id !== child.id);
+  state.entries = state.entries.filter((entry) => entry.childId !== child.id);
+  state.activeChildId = state.children[0].id;
   syncActiveChild();
   saveState();
   render();
