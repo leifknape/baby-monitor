@@ -1534,6 +1534,8 @@ async function refreshApp() {
 }
 
 function loadDemoData() {
+  const confirmed = window.confirm("Demo-Daten laden? Deine eigenen Einträge bleiben erhalten, die App ergänzt aber Beispiel-Einträge. Du kannst Demo-Daten später wieder entfernen.");
+  if (!confirmed) return;
   const existingRealEntries = state.entries.filter((entry) => !entry.data?.demo);
   state.entries = [...existingRealEntries, ...createDemoEntries(state.child.id)].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   state.settings.demoRemoved = false;
