@@ -294,6 +294,30 @@ button {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
 }
 
+.reference-panel {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
+}
+
+.reference-panel strong {
+  font-size: 14px;
+}
+
+.reference-panel span {
+  color: var(--text);
+  font-weight: 850;
+}
+
+.reference-panel small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .bottom-nav {
   position: fixed;
   left: 0;
@@ -530,6 +554,24 @@ button {
   padding-inline: 10px;
 }
 
+.field input[type="date"] {
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  background-clip: padding-box;
+  overflow: hidden;
+}
+
+.field input[type="date"]::-webkit-date-and-time-value,
+.field input[type="datetime-local"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.field input[type="date"]::-webkit-calendar-picker-indicator,
+.field input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  margin-right: 0;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -711,6 +753,22 @@ button {
   font-size: 12px;
 }
 
+.development-detail {
+  margin-top: 3px;
+}
+
+.development-detail summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.development-detail small {
+  display: block;
+  margin-top: 4px;
+}
+
 .positive-list {
   display: grid;
   gap: 8px;
@@ -886,12 +944,30 @@ button {
 .uheft-question textarea {
   width: 100%;
   min-height: 76px;
+  box-sizing: border-box;
   resize: vertical;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   padding: 10px;
+}
+
+.uheft-growth-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.uheft-growth-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 9px 10px;
 }
 
 .uheft-finding summary,

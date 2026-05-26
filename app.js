@@ -82,6 +82,13 @@ const uHeftSchedule = [
   { name: "U9", window: "60.-64. Lebensmonat", start: 1826, end: 1948 },
 ];
 
+const heartRateReferenceRanges = [
+  { minMonths: 0, maxMonths: 4, age: "1-3 Monate", sleep: [90, 160], awake: [100, 205] },
+  { minMonths: 4, maxMonths: 12, age: "4-12 Monate", sleep: [90, 160], awake: [100, 180] },
+  { minMonths: 12, maxMonths: 36, age: "1-2 Jahre", sleep: [80, 120], awake: [98, 140] },
+  { minMonths: 36, maxMonths: 72, age: "3-5 Jahre", sleep: [65, 100], awake: [80, 120] },
+];
+
 const navItems = [
   { id: "dashboard", label: "Übersicht", icon: "home" },
   { id: "timeline", label: "Timeline", icon: "list" },
@@ -548,13 +555,12 @@ function renderMonthlyPositive(items) {
 
 function renderAnalytics() {
   const sections = [
-    renderGrowthCharts(),
-    renderDevelopmentProfile(),
-    renderPositiveDevelopment(),
     renderFeedingCharts(),
     renderDiaperCharts(),
-    renderMilestoneAchievements(),
+    renderGrowthCharts(),
     renderVitalCharts(),
+    renderMilestoneAchievements(),
+    renderDevelopmentProfile(),
   ].filter(Boolean);
 
   return `
@@ -571,7 +577,7 @@ function renderAnalytics() {
 }
 
 function renderDevelopmentProfile() {
-  const achievements = milestoneAchievements();
+  const achievements = uniqueMilestoneAchievements();
   if (!achievements.length) return "";
   const byArea = new Map();
   achievements.forEach((achievement) => {
@@ -599,10 +605,13 @@ function renderDevelopmentProfile() {
               <div class="development-icon">${icon(developmentAreaIcon(area))}</div>
             </div>
             <div class="development-items">
-              ${items.slice(0, 3).map((item) => `
+              ${items.map((item) => `
                 <div class="development-item">
                   <span>${escapeHtml(item.label)}</span>
-                  <small>${escapeHtml(item.age)} · ${shortDateText(item.entry.timestamp)}</small>
+                  <details class="development-detail">
+                    <summary>${escapeHtml(item.entries.length === 1 ? `1 Beobachtung · ${shortDateText(item.entries[0].timestamp)}` : `${item.entries.length} Beobachtungen`)}</summary>
+                    ${item.entries.map((entry) => `<small>${escapeHtml(dateTimeText(entry.timestamp))}${entry.notes ? ` · ${escapeHtml(firstLine(entry.notes))}` : ""}</small>`).join("")}
+                  </details>
                 </div>
               `).join("")}
             </div>
@@ -719,7 +728,7 @@ function renderUHeftExamCard(exam) {
       ${record.summary ? `
         <details class="uheft-snapshot">
           <summary>Gespeicherte Zusammenfassung</summary>
-          ${renderUHeftSummary(record.summary)}
+          ${renderUHeftSummary(record.summary, { editableGrowth: true, examName: exam.name })}
         </details>
       ` : ""}
     </article>
@@ -796,10 +805,10 @@ function renderVitalCharts() {
     cards.push(`<article class="chart-card"><div class="chart-title"><span>Temperatur</span><span>Nur eintragen, wenn gemessen</span></div>${lineChart("Temperatur", temperature, "°C", { showPointLabels: true, showTimeAxis: true })}</article>`);
   }
   if (spo2.length >= 2) {
-    cards.push(`<article class="chart-card"><div class="chart-title"><span>Sauerstoffsättigung</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Sauerstoffsättigung", spo2, "%")}</article>`);
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Sauerstoffsättigung</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Sauerstoffsättigung", spo2, "%")}${spo2ReferencePanel()}</article>`);
   }
   if (heartRate.length >= 2) {
-    cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}</article>`);
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}${heartRateReferencePanel(heartRate.at(-1))}</article>`);
   }
   return cards.join("");
 }
@@ -821,16 +830,16 @@ function renderSettings() {
           <div class="field"><label for="birth-length">Geburtslänge cm <span>Optional</span></label><input id="birth-length" type="number" step="0.1" value="${state.child.birthLengthCm || ""}" /></div>
         </div>
         <div class="field"><label for="birth-head">Kopfumfang bei Geburt cm <span>Optional</span></label><input id="birth-head" type="number" step="0.1" value="${state.child.birthHeadCircumferenceCm || ""}" /></div>
-        <button class="primary-button" type="button" data-action="save-child">Speichern</button>
-      </div>
-      <div class="settings-card">
-        <h3>Einstellungen</h3>
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
         ${selectField("growth-reference-source", "Referenzkurven", [["who", "WHO"], ["german", "U-Heft / deutsche Referenzkurven"]], state.settings.growthReferenceSource || "who")}
         ${selectField("growth-reference-sex", "Perzentilen anzeigen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
         <div class="segmented"><label><input type="checkbox" id="corrected-age-enabled" ${state.settings.correctedAgeEnabled ? "checked" : ""} /> Korrigiertes Alter verwenden</label></div>
         <div class="field"><label for="due-date">Errechneter Geburtstermin <span>Optional</span></label><input id="due-date" type="date" value="${escapeAttr(state.settings.dueDate || "")}" /></div>
         <div class="empty">Korrigiertes Alter wird nur als Entwicklungs- und U-Heft-Orientierung angezeigt.</div>
+        <button class="primary-button" type="button" data-action="save-child">Speichern</button>
+      </div>
+      <div class="settings-card">
+        <h3>App-Einstellungen</h3>
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
         <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
@@ -1032,6 +1041,8 @@ function renderMeasurementFields(choice, entry, base, notes) {
       </div>
       <input type="hidden" name="unit" value="${unit}" />
       ${selectField("situation", "Situation Optional", situationOptions[choice.kind], data.situation)}
+      ${choice.kind === "spo2" ? spo2ReferencePanel() : ""}
+      ${choice.kind === "heart_rate" ? heartRateReferencePanel(entry || { timestamp: new Date().toISOString(), data }) : ""}
       ${notesField(notes)}`;
   }
   return `${base}
@@ -1259,6 +1270,9 @@ function bindEvents() {
   document.querySelectorAll("[data-uheft-note]").forEach((input) => {
     input.addEventListener("change", () => updateUHeftExam(input.dataset.uheftNote, { notes: input.value.trim() }));
   });
+  document.querySelectorAll("[data-uheft-growth]").forEach((input) => {
+    input.addEventListener("change", () => updateUHeftGrowth(input.dataset.uheftGrowth, Number(input.dataset.growthIndex), input.value));
+  });
   document.querySelectorAll("[data-uheft-answer]").forEach((input) => {
     input.addEventListener("change", () => updateUHeftAnswer(Number(input.dataset.uheftAnswer), input.value));
   });
@@ -1417,16 +1431,16 @@ function saveChild() {
   state.child.birthWeightGrams = optionalNumber(document.getElementById("birth-weight").value);
   state.child.birthLengthCm = optionalNumber(document.getElementById("birth-length").value);
   state.child.birthHeadCircumferenceCm = optionalNumber(document.getElementById("birth-head").value);
-  saveState();
-  render();
-}
-
-function saveSettings() {
   state.settings.defaultMilk = document.getElementById("default-milk").value.trim() || "Pre";
   state.settings.growthReferenceSource = document.getElementById("growth-reference-source").value;
   state.settings.growthReferenceSex = document.getElementById("growth-reference-sex").value;
   state.settings.correctedAgeEnabled = document.getElementById("corrected-age-enabled").checked;
   state.settings.dueDate = document.getElementById("due-date").value || "";
+  saveState();
+  render();
+}
+
+function saveSettings() {
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
   saveState();
@@ -1454,6 +1468,25 @@ function updateUHeftAnswer(index, answer) {
   saveState();
 }
 
+function updateUHeftGrowth(name, index, value) {
+  const record = state.settings.uHeftExams?.[name];
+  if (!record?.summary?.growth?.[index]) return;
+  const growth = record.summary.growth.map((item, itemIndex) => itemIndex === index ? { ...item, value: value.trim() } : item);
+  state.settings.uHeftExams = {
+    ...(state.settings.uHeftExams || {}),
+    [name]: {
+      ...record,
+      summary: {
+        ...record.summary,
+        growth,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  };
+  saveState();
+  render();
+}
+
 function markUHeftDone(event) {
   updateUHeftExam(event.currentTarget.dataset.exam, { done: true, doneAt: new Date().toISOString() });
 }
@@ -1467,12 +1500,13 @@ function updateUHeftExam(name, patch) {
   if (!name) return;
   const current = state.settings.uHeftExams?.[name] || {};
   const wasDone = Boolean(current.done);
+  const dateChanged = Object.hasOwn(patch, "doneAt") && patch.doneAt !== current.doneAt;
   const nextRecord = {
     ...current,
     ...patch,
   };
-  if (nextRecord.done && !nextRecord.summary) {
-    nextRecord.summary = currentUHeftSummary(name);
+  if (nextRecord.done && (!nextRecord.summary || dateChanged)) {
+    nextRecord.summary = currentUHeftSummary(name, nextRecord.doneAt || new Date().toISOString());
   }
   if (!nextRecord.done) delete nextRecord.summary;
   state.settings.uHeftExams = {
@@ -1849,13 +1883,14 @@ function growthSinceLastU() {
   return parts.length ? `Seit letzter U: ${parts.join(" · ")}` : "Seit letzter U: noch kein Vergleichswert";
 }
 
-function currentUHeftSummary(examName) {
+function currentUHeftSummary(examName, referenceDateString = new Date().toISOString()) {
   const recentSince = new Date();
   recentSince.setDate(recentSince.getDate() - 30);
+  const referenceDate = new Date(referenceDateString);
   const latestGrowth = [
-    latest(measurements("weight")),
-    latest(measurements("head")),
-    latest(measurements("length")),
+    measurementAtOrBefore("weight", referenceDate),
+    measurementAtOrBefore("head", referenceDate),
+    measurementAtOrBefore("length", referenceDate),
   ].filter(Boolean);
   const recentMilestones = state.entries
     .filter((entry) => entry.type === "milestone" && new Date(entry.timestamp) >= recentSince)
@@ -1880,6 +1915,12 @@ function currentUHeftSummary(examName) {
     finding: latestFinding ? findingSummary(latestFinding) : null,
     questions: normalizedUHeftQuestions(),
   };
+}
+
+function measurementAtOrBefore(kind, date) {
+  const values = measurements(kind);
+  const timestamp = date.getTime();
+  return [...values].reverse().find((entry) => new Date(entry.timestamp).getTime() <= timestamp) || latest(values);
 }
 
 function normalizedUHeftQuestions() {
@@ -1917,10 +1958,15 @@ function findingSummary(entry) {
   };
 }
 
-function renderUHeftSummary(summary) {
+function renderUHeftSummary(summary, options = {}) {
   return `
     <div class="uheft-summary">
-      ${summary.growth?.length ? `<div><strong>Wachstumswerte</strong>${summary.growth.map((item) => `<span>${escapeHtml(item.label)}: ${escapeHtml(item.value)} · ${escapeHtml(dateTimeText(item.timestamp))}</span>`).join("")}${summary.growthSinceU ? `<small>${escapeHtml(summary.growthSinceU)}</small>` : ""}</div>` : ""}
+      ${summary.growth?.length ? `<div><strong>Wachstumswerte</strong>${summary.growth.map((item, index) => options.editableGrowth ? `
+        <label class="uheft-growth-field">
+          <span>${escapeHtml(item.label)} · ${escapeHtml(dateTimeText(item.timestamp))}</span>
+          <input data-uheft-growth="${escapeAttr(options.examName || summary.examName || "")}" data-growth-index="${index}" value="${escapeAttr(item.value)}" />
+        </label>
+      ` : `<span>${escapeHtml(item.label)}: ${escapeHtml(item.value)} · ${escapeHtml(dateTimeText(item.timestamp))}</span>`).join("")}${summary.growthSinceU ? `<small>${escapeHtml(summary.growthSinceU)}</small>` : ""}</div>` : ""}
       ${summary.milestones?.length ? `<div><strong>Meilensteine</strong>${summary.milestones.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
       ${summary.observations?.length ? `<div><strong>Beobachtungen</strong>${summary.observations.map((item) => `<span>${escapeHtml(dateTimeText(item.timestamp))}: ${escapeHtml(item.detail)}</span>`).join("")}</div>` : ""}
       ${summary.finding ? renderFindingSummary(summary.finding) : ""}
@@ -2038,6 +2084,22 @@ function milestoneAchievements() {
         hasAttachment: Boolean(entry.data?.attachment),
       };
     }));
+}
+
+function uniqueMilestoneAchievements() {
+  const grouped = new Map();
+  milestoneAchievements().forEach((achievement) => {
+    const key = `${achievement.age}::${achievement.label}`;
+    const current = grouped.get(key) || {
+      ...achievement,
+      entries: [],
+    };
+    current.entries = [...current.entries, achievement.entry]
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    current.entry = current.entries[0];
+    grouped.set(key, current);
+  });
+  return [...grouped.values()];
 }
 
 function achievementStatusText(achievement) {
@@ -2297,6 +2359,47 @@ function ageMonthsAt(date) {
   const birth = new Date(state.child.birthDate);
   const days = Math.max(0, (startOfDay(date) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
   return Math.max(0, Math.min(24, days / 30.4375));
+}
+
+function ageMonthsSinceBirth(date) {
+  const birth = new Date(state.child.birthDate);
+  const days = Math.max(0, (startOfDay(date) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
+  return days / 30.4375;
+}
+
+function heartRateReferenceFor(entry) {
+  const date = new Date(entry?.timestamp || Date.now());
+  const ageMonths = ageMonthsSinceBirth(date);
+  const range = heartRateReferenceRanges.find((item) => ageMonths >= item.minMonths && ageMonths < item.maxMonths) || heartRateReferenceRanges.at(-1);
+  const situation = String(entry?.data?.situation || "").toLowerCase();
+  const context = situation.includes("schlaf") ? "sleep" : "awake";
+  return {
+    ...range,
+    context,
+    values: range[context],
+  };
+}
+
+function heartRateReferencePanel(entry) {
+  const reference = heartRateReferenceFor(entry);
+  const contextLabel = reference.context === "sleep" ? "Schlaf" : "wach/ruhig";
+  return `
+    <div class="reference-panel">
+      <strong>Puls-Orientierung</strong>
+      <span>${escapeHtml(reference.age)} · ${contextLabel}: ${reference.values[0]}-${reference.values[1]} bpm</span>
+      <small>Orientierungsbereich nach HealthyChildren/AAP. Puls schwankt mit Schlaf, Wachzustand, Aktivität, Trinken und Unruhe.</small>
+    </div>
+  `;
+}
+
+function spo2ReferencePanel() {
+  return `
+    <div class="reference-panel">
+      <strong>SpO₂-Orientierung</strong>
+      <span>Weiter Orientierungsbereich: etwa 90-100 %</span>
+      <small>Nur als Orientierung. Individuelle Zielbereiche, Messbedingungen, Höhe sowie bekannte Herz- oder Lungenthemen können davon abweichen.</small>
+    </div>
+  `;
 }
 
 function normalCdf(z) {
