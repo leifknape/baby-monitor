@@ -99,6 +99,7 @@ const navItems = [
   { id: "settings", label: "Einstellungen", icon: "settings" },
 ];
 
+const childSettingKeys = Object.keys(defaultChildSettings());
 const state = loadState();
 let view = initialViewFromHash();
 let activeSheet = location.hash === "#add" ? "choice" : null;
@@ -132,22 +133,30 @@ function defaultState() {
     birthWeightGrams: 3220,
     birthLengthCm: 51,
     birthHeadCircumferenceCm: 35,
+    settings: defaultChildSettings(),
   };
 
   return {
     child,
+    children: [child],
+    activeChildId: childId,
     entries: createDemoEntries(childId),
     settings: {
-      defaultMilk: "Pre",
       darkMode: true,
-      growthReferenceSource: "who",
-      growthReferenceSex: "none",
-      correctedAgeEnabled: false,
-      dueDate: "",
-      uHeftQuestions: [{ question: "Gibt es etwas, das wir bis zur nächsten U beobachten sollen?", answer: "" }],
-      uHeftExams: {},
-      demoVersion: DEMO_VERSION,
     },
+  };
+}
+
+function defaultChildSettings() {
+  return {
+    defaultMilk: "Pre",
+    growthReferenceSource: "who",
+    growthReferenceSex: "none",
+    correctedAgeEnabled: false,
+    dueDate: "",
+    uHeftQuestions: [{ question: "Gibt es etwas, das wir bis zur nächsten U beobachten sollen?", answer: "" }],
+    uHeftExams: {},
+    demoVersion: DEMO_VERSION,
   };
 }
 
@@ -269,26 +278,26 @@ function createDemoEntries(childId) {
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
+    if (!raw) return prepareState(defaultState());
     const parsed = JSON.parse(raw);
     const fallback = defaultState();
-    const next = {
+    const next = prepareState({
       ...fallback,
       ...parsed,
       settings: { ...fallback.settings, ...(parsed.settings || {}) },
-    };
+    });
     if (!parsed.settings?.explicitThemeChoice) next.settings.darkMode = true;
-    const needsDemoRefresh = !parsed.settings?.demoRemoved && (
-      !Array.isArray(next.entries) ||
-      next.entries.length === 0 ||
-      (next.entries.some((entry) => entry.data?.demo) && next.settings.demoVersion !== DEMO_VERSION)
+    const needsDemoRefresh = !next.settings.demoRemoved && (
+      !Array.isArray(activeEntries(next)) ||
+      activeEntries(next).length === 0 ||
+      (activeEntries(next).some((entry) => entry.data?.demo) && next.settings.demoVersion !== DEMO_VERSION)
     );
     if (needsDemoRefresh) {
-      const realEntries = Array.isArray(next.entries) ? next.entries.filter((entry) => !entry.data?.demo) : [];
+      const realEntries = Array.isArray(next.entries) ? next.entries.filter((entry) => entry.childId !== next.child.id || !entry.data?.demo) : [];
       next.entries = [...realEntries, ...createDemoEntries(next.child.id)].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       next.settings.demoVersion = DEMO_VERSION;
     }
-    if (!parsed.settings?.demoRemoved && (!Array.isArray(next.entries) || next.entries.length === 0)) {
+    if (!next.settings.demoRemoved && (!Array.isArray(next.entries) || activeEntries(next).length === 0)) {
       next.entries = createDemoEntries(next.child.id);
       next.settings.demoVersion = DEMO_VERSION;
     }
@@ -298,11 +307,71 @@ function loadState() {
   }
 }
 
+function prepareState(source) {
+  const fallbackChild = source.child || defaultState().child;
+  const children = (Array.isArray(source.children) && source.children.length ? source.children : [fallbackChild])
+    .map((child) => ({
+      ...child,
+      id: child.id || crypto.randomUUID(),
+      name: child.name || "Baby",
+      birthDate: child.birthDate || new Date().toISOString().slice(0, 10),
+      settings: {
+        ...defaultChildSettings(),
+        ...(source.settings || {}),
+        ...(child.settings || {}),
+      },
+    }));
+  const activeChildId = source.activeChildId && children.some((child) => child.id === source.activeChildId)
+    ? source.activeChildId
+    : children[0].id;
+  const prepared = {
+    ...source,
+    children,
+    activeChildId,
+    entries: Array.isArray(source.entries) ? source.entries.map((entry) => ({ ...entry, childId: entry.childId || activeChildId })) : [],
+    settings: {
+      darkMode: source.settings?.darkMode ?? true,
+      explicitThemeChoice: source.settings?.explicitThemeChoice,
+    },
+  };
+  syncActiveChild(prepared);
+  installSettingsBridge(prepared);
+  return prepared;
+}
+
+function installSettingsBridge(target) {
+  childSettingKeys.forEach((key) => {
+    Object.defineProperty(target.settings, key, {
+      configurable: true,
+      enumerable: false,
+      get: () => currentChild(target).settings[key],
+      set: (value) => {
+        currentChild(target).settings[key] = value;
+      },
+    });
+  });
+}
+
+function currentChild(target = state) {
+  return target.children.find((child) => child.id === target.activeChildId) || target.children[0];
+}
+
+function syncActiveChild(target = state) {
+  target.child = currentChild(target);
+}
+
+function activeEntries(target = state) {
+  const child = currentChild(target);
+  return (target.entries || []).filter((entry) => entry.childId === child.id);
+}
+
 function saveState() {
+  syncActiveChild();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function render() {
+  syncActiveChild();
   document.documentElement.dataset.theme = state.settings.darkMode ? "dark" : "light";
   document.getElementById("app").innerHTML = `
     <main class="app-shell">
@@ -327,6 +396,18 @@ function renderTopbar() {
         </div>
       </div>
     </header>
+    ${renderChildTabs()}
+  `;
+}
+
+function renderChildTabs() {
+  return `
+    <div class="child-tabs" aria-label="Kind wechseln">
+      ${state.children.map((child) => `
+        <button class="child-tab ${child.id === state.activeChildId ? "active" : ""}" type="button" data-action="switch-child" data-child-id="${escapeAttr(child.id)}">${escapeHtml(child.name)}</button>
+      `).join("")}
+      <button class="child-tab add" type="button" data-action="add-child" aria-label="Kind hinzufügen">${icon("plus")}</button>
+    </div>
   `;
 }
 
@@ -345,11 +426,12 @@ function renderDashboard() {
   const diapers = today.filter((entry) => entry.type === "diaper");
   const wet = diapers.filter((entry) => entry.data?.wet);
   const stool = diapers.filter((entry) => entry.data?.stool);
-  const latestFeeding = latest(state.entries.filter((entry) => entry.type === "feeding"));
+  const entries = activeEntries();
+  const latestFeeding = latest(entries.filter((entry) => entry.type === "feeding"));
   const latestWeight = latest(measurements("weight"));
-  const latestObservation = latest(state.entries.filter((entry) => entry.type === "observation"));
-  const latestMilestone = latest(state.entries.filter((entry) => entry.type === "milestone"));
-  const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
+  const latestObservation = latest(entries.filter((entry) => entry.type === "observation"));
+  const latestMilestone = latest(entries.filter((entry) => entry.type === "milestone"));
+  const latestFinding = latest(entries.filter((entry) => entry.type === "medical_finding"));
   const latestPositive = latest(positiveDevelopmentItems().map((item) => item.entry));
   const totalMl = sum(feedings.map((entry) => Number(entry.value || 0)));
   const avgMl = feedings.length ? Math.round(totalMl / feedings.length) : null;
@@ -368,8 +450,10 @@ function renderDashboard() {
   if (latestMilestone) cards.push(statCard("Letzter Meilenstein", milestoneText(latestMilestone), dateTimeText(latestMilestone.timestamp), "flag"));
   if (latestPositive) cards.push(statCard("Positiver Moment", positiveEntryText(latestPositive), dateTimeText(latestPositive.timestamp), "sparkles"));
   if (latestFinding) cards.push(statCard("Letzter Arztbefund", firstLine(latestFinding.data?.assessment || latestFinding.notes || latestFinding.data?.findingType || "Dokumentiert"), dateTimeText(latestFinding.timestamp), "stethoscope"));
+  const hints = sinceHints();
 
   return `
+    ${hints.length ? `<section class="since-strip">${hints.map((hint) => `<span>${escapeHtml(hint)}</span>`).join("")}</section>` : ""}
     ${cards.length ? `<section class="dashboard-grid">${cards.join("")}</section>` : renderEmptyDashboard()}
     <section>
       <div class="section-head">
@@ -404,6 +488,21 @@ function renderEmptyDashboard() {
       <p class="detail-stack">Diese Übersicht zeigt nur tatsächlich vorhandene Daten. Werte sind optional und können jederzeit über <strong>Eintrag hinzufügen</strong> ergänzt werden.</p>
     </section>
   `;
+}
+
+function sinceHints() {
+  const entries = activeEntries();
+  return [
+    sinceHint("Letzte Fütterung", latest(entries.filter((entry) => entry.type === "feeding"))),
+    sinceHint("Letzte nasse Windel", latest(entries.filter((entry) => entry.type === "diaper" && entry.data?.wet))),
+    sinceHint("Letzte Gewichtsmessung", latest(measurements("weight"))),
+    sinceHint("Letzter Arztbefund", latest(entries.filter((entry) => entry.type === "medical_finding"))),
+  ].filter(Boolean);
+}
+
+function sinceHint(label, entry) {
+  if (!entry) return "";
+  return `${label}: ${relativeTimeText(entry.timestamp)}`;
 }
 
 function statCard(label, value, sub, iconName, wide = false) {
@@ -756,7 +855,7 @@ function renderGrowthCharts() {
 }
 
 function renderFeedingCharts() {
-  const feedings = state.entries.filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
+  const feedings = activeEntries().filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
   if (!feedings.length) return "";
   const byDay = dailyCounts(feedings, (items) => sum(items.map((entry) => Number(entry.value || 0))));
   const maxBottle = Math.max(...feedings.map((entry) => Number(entry.value)));
@@ -768,7 +867,7 @@ function renderFeedingCharts() {
 }
 
 function renderDiaperCharts() {
-  const diapers = state.entries.filter((entry) => entry.type === "diaper");
+  const diapers = activeEntries().filter((entry) => entry.type === "diaper");
   if (!diapers.length) return "";
   const byDay = dailyCounts(diapers, (items) => items.length);
   return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>Einträge pro Tag</span></div>${barChart(byDay, "")}</article>`;
@@ -814,7 +913,7 @@ function renderVitalCharts() {
 }
 
 function renderSettings() {
-  const hasDemoData = state.entries.some((entry) => entry.data?.demo);
+  const hasDemoData = activeEntries().some((entry) => entry.data?.demo);
   return `
     <section>
       <div class="section-head">
@@ -917,7 +1016,7 @@ function renderSheet() {
     `;
   }
 
-  const entry = editingId ? state.entries.find((item) => item.id === editingId) : null;
+  const entry = editingId ? activeEntries().find((item) => item.id === editingId) : null;
   const choice = entry ? choiceForEntry(entry) : entryChoices.find((item) => item.id === activeSheet);
   return `
     <div class="modal-backdrop" data-action="close-sheet">
@@ -1175,7 +1274,7 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-action='edit-entry']").forEach((button) => {
     button.addEventListener("click", () => {
-      const entry = state.entries.find((item) => item.id === button.dataset.id);
+      const entry = activeEntries().find((item) => item.id === button.dataset.id);
       const choice = choiceForEntry(entry);
       editingId = entry.id;
       activeSheet = choice.id;
@@ -1233,6 +1332,8 @@ function bindEvents() {
   const actions = {
     "save-child": saveChild,
     "save-settings": saveSettings,
+    "switch-child": switchChild,
+    "add-child": addChild,
     "refresh-app": refreshApp,
     "load-demo": loadDemoData,
     "remove-demo": removeDemoData,
@@ -1293,7 +1394,7 @@ function closeSheet() {
 async function saveEntry(choiceId, formData) {
   const choice = entryChoices.find((item) => item.id === choiceId);
   const now = new Date().toISOString();
-  const existing = editingId ? state.entries.find((entry) => entry.id === editingId) : null;
+  const existing = editingId ? activeEntries().find((entry) => entry.id === editingId) : null;
   const data = dataForChoice(choice, formData);
   const attachment = await attachmentFrom(formData);
   if (attachment) data.attachment = attachment;
@@ -1440,6 +1541,31 @@ function saveChild() {
   render();
 }
 
+function switchChild(event) {
+  const childId = event.currentTarget.dataset.childId;
+  if (!childId || childId === state.activeChildId) return;
+  state.activeChildId = childId;
+  syncActiveChild();
+  saveState();
+  render();
+}
+
+function addChild() {
+  const name = prompt("Name des Kindes");
+  if (!name?.trim()) return;
+  const child = {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    birthDate: new Date().toISOString().slice(0, 10),
+    settings: defaultChildSettings(),
+  };
+  state.children.push(child);
+  state.activeChildId = child.id;
+  syncActiveChild();
+  saveState();
+  render();
+}
+
 function saveSettings() {
   state.settings.darkMode = document.getElementById("dark-mode").checked;
   state.settings.explicitThemeChoice = true;
@@ -1536,7 +1662,7 @@ async function refreshApp() {
 function loadDemoData() {
   const confirmed = window.confirm("Demo-Daten laden? Deine eigenen Einträge bleiben erhalten, die App ergänzt aber Beispiel-Einträge. Du kannst Demo-Daten später wieder entfernen.");
   if (!confirmed) return;
-  const existingRealEntries = state.entries.filter((entry) => !entry.data?.demo);
+  const existingRealEntries = state.entries.filter((entry) => entry.childId !== state.child.id || !entry.data?.demo);
   state.entries = [...existingRealEntries, ...createDemoEntries(state.child.id)].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   state.settings.demoRemoved = false;
   state.settings.demoVersion = DEMO_VERSION;
@@ -1545,7 +1671,7 @@ function loadDemoData() {
 }
 
 function removeDemoData() {
-  state.entries = state.entries.filter((entry) => !entry.data?.demo);
+  state.entries = state.entries.filter((entry) => entry.childId !== state.child.id || !entry.data?.demo);
   state.settings.demoRemoved = true;
   saveState();
   render();
@@ -1553,7 +1679,7 @@ function removeDemoData() {
 
 function exportLongCsv() {
   const headers = ["id", "childId", "timestamp", "type", "value", "unit", "data", "notes", "createdAt", "updatedAt"];
-  downloadCsv("baby-monitor-export.csv", toCsv(state.entries, headers));
+  downloadCsv("baby-monitor-export.csv", toCsv(activeEntries(), headers));
 }
 
 function exportSeparateCsvs() {
@@ -1568,7 +1694,7 @@ function exportSeparateCsvs() {
     "notes.csv": (entry) => entry.type === "note",
   };
   const headers = ["id", "childId", "timestamp", "type", "value", "unit", "data", "notes", "createdAt", "updatedAt"];
-  Object.entries(groups).forEach(([filename, predicate]) => downloadCsv(filename, toCsv(state.entries.filter(predicate), headers)));
+  Object.entries(groups).forEach(([filename, predicate]) => downloadCsv(filename, toCsv(activeEntries().filter(predicate), headers)));
 }
 
 function exportDoctorSummary() {
@@ -1577,7 +1703,7 @@ function exportDoctorSummary() {
   const start = startOfDay(new Date(doctorExportRange.from));
   const end = startOfDay(new Date(doctorExportRange.to));
   end.setDate(end.getDate() + 1);
-  const entries = state.entries
+  const entries = activeEntries()
     .filter((entry) => {
       const timestamp = new Date(entry.timestamp);
       return timestamp >= start && timestamp < end;
@@ -1775,36 +1901,36 @@ function filteredTimelineEntries() {
   if (timelineFilter === "7days") {
     const start = startOfDay(now);
     start.setDate(start.getDate() - 6);
-    return state.entries.filter((entry) => new Date(entry.timestamp) >= start);
+    return activeEntries().filter((entry) => new Date(entry.timestamp) >= start);
   }
   if (timelineFilter === "custom") {
     const start = startOfDay(new Date(customRange.from));
     const end = startOfDay(new Date(customRange.to));
     end.setDate(end.getDate() + 1);
-    return state.entries.filter((entry) => {
+    return activeEntries().filter((entry) => {
       const timestamp = new Date(entry.timestamp);
       return timestamp >= start && timestamp < end;
     });
   }
   if (timelineFilter.startsWith("measurement:")) {
     const kind = timelineFilter.split(":")[1];
-    return state.entries.filter((entry) => entry.type === "measurement" && entry.data?.kind === kind);
+    return activeEntries().filter((entry) => entry.type === "measurement" && entry.data?.kind === kind);
   }
-  return state.entries.filter((entry) => entry.type === timelineFilter);
+  return activeEntries().filter((entry) => entry.type === timelineFilter);
 }
 
 function entriesForDay(date) {
   const start = startOfDay(date);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  return state.entries.filter((entry) => {
+  return activeEntries().filter((entry) => {
     const timestamp = new Date(entry.timestamp);
     return timestamp >= start && timestamp < end;
   });
 }
 
 function entriesForMonth(date) {
-  return state.entries.filter((entry) => isSameMonth(new Date(entry.timestamp), date));
+  return activeEntries().filter((entry) => isSameMonth(new Date(entry.timestamp), date));
 }
 
 function monthDateFromSelection() {
@@ -1815,7 +1941,7 @@ function monthDateFromSelection() {
 
 function monthlyReviewOptions() {
   const currentYear = new Date().getFullYear();
-  const entryYears = state.entries.map((entry) => new Date(entry.timestamp).getFullYear()).filter(Number.isFinite);
+  const entryYears = activeEntries().map((entry) => new Date(entry.timestamp).getFullYear()).filter(Number.isFinite);
   const years = [...new Set([currentYear, ...entryYears])].sort((a, b) => b - a).map((year) => [String(year), String(year)]);
   const months = Array.from({ length: 12 }, (_, index) => [
     String(index),
@@ -1841,7 +1967,7 @@ function monthlyGrowthPart(kind, values) {
 }
 
 function measurements(kind) {
-  return state.entries
+  return activeEntries()
     .filter((entry) => entry.type === "measurement" && entry.data?.kind === kind && Number.isFinite(Number(entry.value)))
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
@@ -1908,14 +2034,16 @@ function currentUHeftSummary(examName, referenceDateString = new Date().toISOStr
     measurementAtOrBefore("length", referenceDate),
   ].filter(Boolean);
   const recentMilestones = state.entries
+    .filter((entry) => entry.childId === state.child.id)
     .filter((entry) => entry.type === "milestone" && new Date(entry.timestamp) >= recentSince)
     .slice(0, 6)
     .map(summaryEntry);
   const recentObservations = state.entries
+    .filter((entry) => entry.childId === state.child.id)
     .filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince)
     .slice(0, 6)
     .map(summaryEntry);
-  const latestFinding = latest(state.entries.filter((entry) => entry.type === "medical_finding"));
+  const latestFinding = latest(activeEntries().filter((entry) => entry.type === "medical_finding"));
   return {
     examName,
     createdAt: new Date().toISOString(),
@@ -2082,7 +2210,7 @@ function dailyCounts(entries, reducer) {
 }
 
 function positiveDevelopmentItems() {
-  const milestoneItems = state.entries
+  const milestoneItems = activeEntries()
     .filter((entry) => entry.type === "milestone")
     .map((entry) => ({
       entry,
@@ -2090,7 +2218,7 @@ function positiveDevelopmentItems() {
       detail: entry.data?.status || "neue Fähigkeit",
       icon: "flag",
     }));
-  const observationItems = state.entries
+  const observationItems = activeEntries()
     .filter((entry) => entry.type === "observation" && positiveObservationText(entry))
     .map((entry) => ({
       entry,
@@ -2116,7 +2244,7 @@ function positiveEntryText(entry) {
 }
 
 function milestoneAchievements() {
-  return state.entries
+  return activeEntries()
     .filter((entry) => entry.type === "milestone")
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .flatMap((entry) => (entry.data?.milestones || []).map((milestone) => {
@@ -2571,6 +2699,15 @@ function shortDateText(dateString) {
 
 function timeText(dateString) {
   return new Date(dateString).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
+function relativeTimeText(dateString) {
+  const diffMinutes = Math.max(0, Math.round((Date.now() - new Date(dateString).getTime()) / 60000));
+  if (diffMinutes < 60) return `vor ${diffMinutes || 1} Min.`;
+  const hours = Math.round(diffMinutes / 60);
+  if (hours < 48) return `vor ${hours} Std.`;
+  const days = Math.round(hours / 24);
+  return `vor ${days} Tagen`;
 }
 
 function toLocalInputValue(dateString) {
