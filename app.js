@@ -775,7 +775,7 @@ function renderDiaperCharts() {
 }
 
 function renderMilestoneAchievements() {
-  const achievements = milestoneAchievements();
+  const achievements = uniqueMilestoneAchievements().filter((achievement) => achievement.status === "erstmals beobachtet");
   if (!achievements.length) return "";
   return `
     <article class="chart-card">
@@ -1472,15 +1472,17 @@ function updateUHeftGrowth(name, index, value) {
   const record = state.settings.uHeftExams?.[name];
   if (!record?.summary?.growth?.[index]) return;
   const growth = record.summary.growth.map((item, itemIndex) => itemIndex === index ? { ...item, value: value.trim() } : item);
+  const nextSummary = {
+    ...record.summary,
+    growth,
+    updatedAt: new Date().toISOString(),
+  };
+  nextSummary.growthSinceU = growthSincePreviousU(name, nextSummary);
   state.settings.uHeftExams = {
     ...(state.settings.uHeftExams || {}),
     [name]: {
       ...record,
-      summary: {
-        ...record.summary,
-        growth,
-        updatedAt: new Date().toISOString(),
-      },
+      summary: nextSummary,
     },
   };
   saveState();
@@ -1868,18 +1870,29 @@ function nextUHeftExam() {
   return { ...exam, status: `${formatDayDistance(exam.start - ageDays)} bis zum Zeitraum${suffix}` };
 }
 
-function lastCompletedUDate() {
-  return Object.values(state.settings.uHeftExams || {})
-    .filter((record) => record.done && record.doneAt)
-    .map((record) => new Date(record.doneAt))
-    .filter((date) => !Number.isNaN(date.getTime()))
-    .sort((a, b) => b - a)[0];
+function completedURecords() {
+  return Object.entries(state.settings.uHeftExams || {})
+    .filter(([, record]) => record.done && record.doneAt)
+    .map(([name, record]) => ({ name, ...record, date: new Date(record.doneAt) }))
+    .filter((record) => !Number.isNaN(record.date.getTime()))
+    .sort((a, b) => b.date - a.date);
 }
 
-function growthSinceLastU() {
-  const lastU = lastCompletedUDate();
+function lastCompletedURecord(excludeName = "") {
+  return completedURecords().find((record) => record.name !== excludeName);
+}
+
+function growthSinceLastU(currentGrowthEntries = []) {
+  const lastU = lastCompletedURecord();
   if (!lastU) return "Seit letzter U: noch keine U dokumentiert";
-  const parts = ["weight", "head", "length"].map((kind) => growthDeltaSince(kind, lastU)).filter(Boolean);
+  const parts = growthComparisonParts(currentGrowthEntries.map(growthEntryToSnapshot), lastU.summary?.growth || []);
+  return parts.length ? `Seit letzter U: ${parts.join(" · ")}` : "Seit letzter U: noch kein Vergleichswert";
+}
+
+function growthSincePreviousU(examName, summary) {
+  const priorU = lastCompletedURecord(examName);
+  if (!priorU) return "Seit letzter U: noch keine vorherige U dokumentiert";
+  const parts = growthComparisonParts(summary.growth || [], priorU.summary?.growth || []);
   return parts.length ? `Seit letzter U: ${parts.join(" · ")}` : "Seit letzter U: noch kein Vergleichswert";
 }
 
@@ -1909,7 +1922,7 @@ function currentUHeftSummary(examName, referenceDateString = new Date().toISOStr
       value: formatValue(entry),
       timestamp: entry.timestamp,
     })),
-    growthSinceU: growthSinceLastU(),
+    growthSinceU: growthSinceLastU(latestGrowth),
     milestones: recentMilestones,
     observations: recentObservations,
     finding: latestFinding ? findingSummary(latestFinding) : null,
@@ -1921,6 +1934,49 @@ function measurementAtOrBefore(kind, date) {
   const values = measurements(kind);
   const timestamp = date.getTime();
   return [...values].reverse().find((entry) => new Date(entry.timestamp).getTime() <= timestamp) || latest(values);
+}
+
+function growthEntryToSnapshot(entry) {
+  return {
+    label: entryTitle(entry),
+    value: formatValue(entry),
+    timestamp: entry.timestamp,
+  };
+}
+
+function growthComparisonParts(currentItems, priorItems) {
+  const priorByKind = new Map(priorItems.map((item) => [growthKindFromLabel(item.label), item]));
+  return currentItems.map((item) => {
+    const kind = growthKindFromLabel(item.label);
+    const prior = priorByKind.get(kind);
+    const currentValue = numericGrowthValue(item.value);
+    const priorValue = numericGrowthValue(prior?.value);
+    if (!kind || !Number.isFinite(currentValue) || !Number.isFinite(priorValue)) return "";
+    const delta = currentValue - priorValue;
+    const unit = growthUnitFromValue(item.value) || (kind === "weight" ? "g" : "cm");
+    const label = { weight: "Gewicht", head: "Kopfumfang", length: "Länge" }[kind];
+    const formatted = kind === "weight" ? `${Math.round(delta)} ${unit}` : `${delta.toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
+    return `${label} ${delta >= 0 ? "+" : ""}${formatted}`;
+  }).filter(Boolean);
+}
+
+function growthKindFromLabel(label = "") {
+  if (label.includes("Gewicht")) return "weight";
+  if (label.includes("Kopfumfang")) return "head";
+  if (label.includes("Körperlänge") || label.includes("Länge")) return "length";
+  return "";
+}
+
+function numericGrowthValue(value = "") {
+  const normalized = String(value).replace(",", ".").match(/-?\d+(\.\d+)?/);
+  return normalized ? Number(normalized[0]) : NaN;
+}
+
+function growthUnitFromValue(value = "") {
+  if (String(value).includes("kg")) return "kg";
+  if (String(value).includes("cm")) return "cm";
+  if (String(value).includes("g")) return "g";
+  return "";
 }
 
 function normalizedUHeftQuestions() {
@@ -1982,18 +2038,6 @@ function renderFindingSummary(finding) {
       <div>${finding.lines?.length ? finding.lines.map((item) => `<span>${escapeHtml(item)}</span>`).join("") : `<span>${escapeHtml(finding.detail || "Keine weiteren Details dokumentiert.")}</span>`}</div>
     </details>
   `;
-}
-
-function growthDeltaSince(kind, sinceDate) {
-  const values = measurements(kind);
-  const latestValue = values.at(-1);
-  const prior = [...values].reverse().find((entry) => new Date(entry.timestamp) <= sinceDate);
-  if (!latestValue || !prior || latestValue.id === prior.id) return "";
-  const delta = Number(latestValue.value) - Number(prior.value);
-  const label = { weight: "Gewicht", head: "Kopfumfang", length: "Länge" }[kind];
-  const unit = latestValue.unit || (kind === "weight" ? "g" : "cm");
-  const formatted = kind === "weight" ? `${Math.round(delta)} ${unit}` : `${delta.toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
-  return `${label} ${delta >= 0 ? "+" : ""}${formatted}`;
 }
 
 function renderFindingDetails(entry) {
@@ -2088,7 +2132,8 @@ function milestoneAchievements() {
 
 function uniqueMilestoneAchievements() {
   const grouped = new Map();
-  milestoneAchievements().forEach((achievement) => {
+  const achievements = milestoneAchievements();
+  achievements.forEach((achievement) => {
     const key = `${achievement.age}::${achievement.label}`;
     const current = grouped.get(key) || {
       ...achievement,
@@ -2096,7 +2141,17 @@ function uniqueMilestoneAchievements() {
     };
     current.entries = [...current.entries, achievement.entry]
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    current.entry = current.entries[0];
+    const firstObserved = achievements
+      .filter((item) => `${item.age}::${item.label}` === key && item.status === "erstmals beobachtet")
+      .sort((a, b) => new Date(a.entry.timestamp) - new Date(b.entry.timestamp))[0];
+    if (firstObserved) {
+      current.entry = firstObserved.entry;
+      current.status = firstObserved.status;
+      current.situation = firstObserved.situation;
+      current.hasAttachment = firstObserved.hasAttachment;
+    } else {
+      current.entry = current.entries.at(-1);
+    }
     grouped.set(key, current);
   });
   return [...grouped.values()];
