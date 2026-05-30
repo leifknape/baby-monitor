@@ -663,7 +663,7 @@ function renderMonthlyReview() {
           </article>
           ${renderMonthlyEntries("Neue Fähigkeiten", milestones, "flag")}
           ${renderMonthlyPositive(positives)}
-          ${renderMonthlyEntries("Beobachtungen", observations, "eye")}
+          ${renderMonthlyEntries("Beobachtungen", observations, "eye", { groupByDay: true, showNotes: true, limit: Infinity })}
           ${renderMonthlyEntries("Arztbefunde", findings, "stethoscope")}
         ` : `<div class="empty">Noch keine Einträge in diesem Monat vorhanden.</div>`}
       </div>
@@ -671,33 +671,50 @@ function renderMonthlyReview() {
   `;
 }
 
-function renderMonthlyEntries(title, entries, iconName) {
+function renderMonthlyEntries(title, entries, iconName, options = {}) {
   if (!entries.length) return "";
+  const visibleEntries = options.limit === Infinity ? entries : entries.slice(0, options.limit || 6);
   return `
     <article class="chart-card">
       <div class="chart-title"><span>${escapeHtml(title)}</span><span>${entries.length}</span></div>
       <div class="monthly-list">
-        ${entries.slice(0, 6).map((entry) => `
-          <div>
-            <strong>${escapeHtml(dateTimeText(entry.timestamp))}</strong>
-            <span>${icon(iconName)} ${escapeHtml(detailForEntry(entry))}</span>
-          </div>
-        `).join("")}
+        ${options.groupByDay ? renderMonthlyEntriesByDay(visibleEntries, iconName, options) : visibleEntries.map((entry) => renderMonthlyEntryItem(entry, iconName, options)).join("")}
       </div>
     </article>
   `;
 }
 
+function renderMonthlyEntryItem(entry, iconName, options = {}) {
+  const detail = detailForEntry(entry);
+  const note = options.showNotes && entry.notes ? ` · ${entry.notes}` : "";
+  return `
+    <div>
+      <strong>${escapeHtml(dateTimeText(entry.timestamp))}</strong>
+      <span>${icon(iconName)} ${escapeHtml(detail + note)}</span>
+    </div>
+  `;
+}
+
+function renderMonthlyEntriesByDay(entries, iconName, options = {}) {
+  return groupedEntriesByDay(entries).map(({ label, entries: dayEntries }) => `
+    <div>
+      <strong>${escapeHtml(label)}</strong>
+      ${dayEntries.map((entry) => `<span>${icon(iconName)} ${escapeHtml(`${timeText(entry.timestamp)} · ${detailForEntry(entry)}${options.showNotes && entry.notes ? ` · ${entry.notes}` : ""}`)}</span>`).join("")}
+    </div>
+  `).join("");
+}
+
 function renderMonthlyPositive(items) {
   if (!items.length) return "";
+  const grouped = groupedPositiveItems(items);
   return `
     <article class="chart-card">
       <div class="chart-title"><span>Positive Entwicklung</span><span>${items.length}</span></div>
       <div class="monthly-list">
-        ${items.slice(0, 6).map((item) => `
+        ${grouped.map((group) => `
           <div>
-            <strong>${escapeHtml(item.title)}</strong>
-            <span>${escapeHtml(dateTimeText(item.entry.timestamp))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</span>
+            <strong>${escapeHtml(group.title)}</strong>
+            ${group.items.map((item) => `<span>${escapeHtml(dateTimeText(item.entry.timestamp))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</span>`).join("")}
           </div>
         `).join("")}
       </div>
@@ -2276,10 +2293,51 @@ function formatDayDistance(days) {
 function dailyCounts(entries, reducer) {
   const groups = new Map();
   entries.forEach((entry) => {
-    const key = new Date(entry.timestamp).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-    groups.set(key, [...(groups.get(key) || []), entry]);
+    const date = new Date(entry.timestamp);
+    const key = localDateKey(date);
+    const label = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+    const current = groups.get(key) || { label, entries: [] };
+    current.entries = [...current.entries, entry];
+    groups.set(key, current);
   });
-  return [...groups.entries()].map(([label, items]) => ({ label, value: reducer(items) })).slice(-7);
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, group]) => ({ label: group.label, value: reducer(group.entries) }))
+    .slice(-7);
+}
+
+function groupedEntriesByDay(entries) {
+  const groups = new Map();
+  entries.forEach((entry) => {
+    const date = new Date(entry.timestamp);
+    const key = localDateKey(date);
+    const label = date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+    const current = groups.get(key) || { label, entries: [] };
+    current.entries = [...current.entries, entry].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    groups.set(key, current);
+  });
+  return [...groups.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([, group]) => group);
+}
+
+function groupedPositiveItems(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = item.title;
+    const current = groups.get(key) || { title: item.title, items: [] };
+    current.items = [...current.items, item].sort((a, b) => new Date(b.entry.timestamp) - new Date(a.entry.timestamp));
+    groups.set(key, current);
+  });
+  return [...groups.values()].sort((a, b) => new Date(b.items[0].entry.timestamp) - new Date(a.items[0].entry.timestamp));
+}
+
+function localDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function positiveDevelopmentItems() {
