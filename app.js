@@ -686,7 +686,7 @@ function renderMonthlyEntries(title, entries, iconName, options = {}) {
 
 function renderMonthlyEntryItem(entry, iconName, options = {}) {
   const detail = detailForEntry(entry);
-  const note = options.showNotes && entry.notes ? ` · ${entry.notes}` : "";
+  const note = options.showNotes && entry.notes && entry.type !== "observation" ? ` · ${entry.notes}` : "";
   return `
     <div>
       <strong>${escapeHtml(dateTimeText(entry.timestamp))}</strong>
@@ -699,7 +699,7 @@ function renderMonthlyEntriesByDay(entries, iconName, options = {}) {
   return groupedEntriesByDay(entries).map(({ label, entries: dayEntries }) => `
     <div>
       <strong>${escapeHtml(label)}</strong>
-      ${dayEntries.map((entry) => `<span>${icon(iconName)} ${escapeHtml(`${timeText(entry.timestamp)} · ${detailForEntry(entry)}${options.showNotes && entry.notes ? ` · ${entry.notes}` : ""}`)}</span>`).join("")}
+      ${dayEntries.map((entry) => `<span>${icon(iconName)} ${escapeHtml(`${timeText(entry.timestamp)} · ${detailForEntry(entry)}${options.showNotes && entry.notes && entry.type !== "observation" ? ` · ${entry.notes}` : ""}`)}</span>`).join("")}
     </div>
   `).join("");
 }
@@ -1835,7 +1835,7 @@ function doctorSummaryLines(entries, from, to) {
     ...(milestones.length ? milestones.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`) : [`- Keine Meilensteine im Zeitraum.`]),
     ``,
     `## Beobachtungen`,
-    ...(observations.length ? observations.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}${entry.notes ? ` (${entry.notes})` : ""}`) : [`- Keine Beobachtungen im Zeitraum.`]),
+    ...(observations.length ? observations.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`) : [`- Keine Beobachtungen im Zeitraum.`]),
     ``,
     `## Medikamente`,
     ...(medications.length ? medications.map((entry) => `- ${dateTimeText(entry.timestamp)}: ${detailForEntry(entry)}`) : [`- Keine Medikamente im Zeitraum.`]),
@@ -2131,7 +2131,7 @@ function currentUHeftSummary(examName, referenceDateString = new Date().toISOStr
   const recentObservations = state.entries
     .filter((entry) => entry.childId === state.child.id)
     .filter((entry) => entry.type === "observation" && new Date(entry.timestamp) >= recentSince)
-    .slice(0, 6)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     .map(summaryEntry);
   const latestFinding = latest(activeEntries().filter((entry) => entry.type === "medical_finding"));
   return {
@@ -2468,7 +2468,8 @@ function countBy(entries, getKey) {
 function barChart(items, unit) {
   if (!items.length) return `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`;
   const max = Math.max(...items.map((item) => item.value), 1);
-  return `<div class="bars">${items.map((item) => `
+  const displayItems = [...items].reverse();
+  return `<div class="bars">${displayItems.map((item) => `
     <div class="bar-row">
       <span>${escapeHtml(item.label)}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${Math.max(6, (item.value / max) * 100)}%"></div></div>
@@ -2736,7 +2737,7 @@ function detailForEntry(entry) {
   if (entry.type === "feeding") return [formatValue(entry), entry.data?.milkType, entry.data?.completion].filter(Boolean).join(" · ") || "Trinken";
   if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
-  if (entry.type === "observation") return [categoriesText(entry), entry.data?.duration].filter(Boolean).join(" · ") || firstLine(entry.notes || "Beobachtung");
+  if (entry.type === "observation") return observationDetail(entry);
   if (entry.type === "milestone") return [milestoneText(entry), entry.data?.status, entry.data?.situation, entry.data?.attachment ? "Foto" : "", firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit, entry.data?.given === false ? "nicht gegeben" : "gegeben"].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
@@ -2744,7 +2745,23 @@ function detailForEntry(entry) {
 }
 
 function categoriesText(entry) {
-  return (entry.data?.categories || []).map((item) => item.split(": ").pop()).slice(0, 2).join(", ");
+  return (entry.data?.categories || []).map((item) => item.split(": ").pop()).join(", ");
+}
+
+function observationDetail(entry) {
+  return [
+    categoriesText(entry),
+    categoryNotesText(entry),
+    entry.data?.duration,
+    entry.notes,
+  ].filter(Boolean).join(" · ") || "Beobachtung";
+}
+
+function categoryNotesText(entry) {
+  return Object.entries(entry.data?.categoryNotes || {})
+    .filter(([, value]) => value)
+    .map(([group, value]) => `${group}: ${value}`)
+    .join(" · ");
 }
 
 function milestoneText(entry) {
