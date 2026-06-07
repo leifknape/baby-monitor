@@ -910,8 +910,9 @@ function renderGrowthCharts() {
     ["head", "Kopfumfang", "cm"],
     ["length", "Körperlänge", "cm"],
   ];
+  if (growthReferenceData("bmi").data) kinds.push(["bmi", "BMI", "kg/m²"]);
   const charts = kinds.map(([kind, title, unit]) => {
-    const values = measurements(kind);
+    const values = kind === "bmi" ? bmiMeasurements() : measurements(kind);
     if (values.length < 2) return "";
     return lineChart(title, values, unit, { showPointLabels: true, showTimeAxis: true, referenceKind: kind });
   }).filter(Boolean);
@@ -1000,8 +1001,9 @@ function renderSettings() {
         </div>
         <div class="field"><label for="birth-head">Kopfumfang bei Geburt cm <span>Optional</span></label><input id="birth-head" type="number" step="0.1" value="${state.child.birthHeadCircumferenceCm || ""}" /></div>
         <div class="field"><label for="default-milk">Standardnahrung</label><input id="default-milk" value="${escapeAttr(state.settings.defaultMilk)}" /></div>
-        ${selectField("growth-reference-source", "Referenzkurven", [["who", "WHO"], ["german", "U-Heft / deutsche Referenzkurven"]], state.settings.growthReferenceSource || "who")}
+        ${selectField("growth-reference-source", "Referenzkurven", [["who", "WHO"], ["german", "U-Heft / deutsche Referenzkurven"], ["uheft_book", "U-Heft-Kurven aus Heft (0-7 J.)"]], state.settings.growthReferenceSource || "who")}
         ${selectField("growth-reference-sex", "Perzentilen anzeigen", [["none", "Nicht anzeigen"], ["female", "Mädchen"], ["male", "Junge"]], state.settings.growthReferenceSex || "none")}
+        ${growthReferenceSettingsNote()}
         <div class="segmented"><label><input type="checkbox" id="corrected-age-enabled" ${state.settings.correctedAgeEnabled ? "checked" : ""} /> Korrigiertes Alter verwenden</label></div>
         <div class="field"><label for="due-date">Errechneter Geburtstermin <span>Optional</span></label><input id="due-date" type="date" value="${escapeAttr(state.settings.dueDate || "")}" /></div>
         <div class="empty">Korrigiertes Alter wird nur als Entwicklungs- und U-Heft-Orientierung angezeigt.</div>
@@ -1280,6 +1282,11 @@ function selectField(name, label, options, selected) {
       </select>
     </div>
   `;
+}
+
+function growthReferenceSettingsNote() {
+  if (state.settings.growthReferenceSource !== "uheft_book") return "";
+  return `<div class="empty">Die U-Heft-Kurven aus dem Heft sind als Orientierung aus den bereitgestellten Kurven abgeleitet. Nur eintragen, wenn gemessen.</div>`;
 }
 
 function renderObservationCategories(selected, selectedNotes = {}) {
@@ -2062,6 +2069,35 @@ function measurements(kind) {
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
+function bmiMeasurements() {
+  const lengths = measurements("length");
+  return measurements("weight")
+    .map((weight) => {
+      const length = measurementOnSameDay(lengths, weight.timestamp);
+      if (!length) return null;
+      const meters = Number(length.value) / 100;
+      if (!meters) return null;
+      const value = (Number(weight.value) / 1000) / (meters ** 2);
+      return {
+        id: `bmi-${weight.id}-${length.id}`,
+        childId: weight.childId,
+        type: "measurement",
+        timestamp: weight.timestamp,
+        createdAt: weight.createdAt,
+        updatedAt: weight.updatedAt,
+        value: Math.round(value * 10) / 10,
+        unit: "kg/m²",
+        data: { kind: "bmi", weightId: weight.id, lengthId: length.id },
+      };
+    })
+    .filter(Boolean);
+}
+
+function measurementOnSameDay(entries, timestamp) {
+  const key = localDateKey(new Date(timestamp));
+  return latest(entries.filter((entry) => localDateKey(new Date(entry.timestamp)) === key));
+}
+
 function latestMeasurementSummary() {
   const candidates = ["length", "head", "temperature", "spo2", "heart_rate"]
     .map((kind) => latest(measurements(kind)))
@@ -2609,13 +2645,9 @@ function chartPointValue(entry, unit) {
 
 function referenceSeries(kind, minTime, maxTime) {
   const { sex, data } = growthReferenceData(kind);
-  if (!data || sex === "none" || !["weight", "head", "length"].includes(kind)) return [];
+  if (!data || sex === "none" || !["weight", "head", "length", "bmi"].includes(kind)) return [];
   const count = 18;
-  const keys = [
-    ["p5", "P5"],
-    ["p50", "P50"],
-    ["p95", "P95"],
-  ];
+  const keys = referenceLineKeys(kind);
   return keys.map(([key, label]) => ({
     key,
     label,
@@ -2630,14 +2662,64 @@ function referenceSeries(kind, minTime, maxTime) {
 
 function percentileForEntry(entry, kind) {
   const { sex, data } = growthReferenceData(kind);
-  if (!entry || !data || sex === "none" || !["weight", "head", "length"].includes(kind)) return "";
+  if (!entry || !data || sex === "none" || !["weight", "head", "length", "bmi"].includes(kind)) return "";
   const ageMonths = ageMonthsAt(new Date(entry.timestamp));
   const lms = growthLmsAt(data, ageMonths);
-  if (!lms) return "";
   const value = Number(entry.value);
-  const z = lms.l === 0 ? Math.log(value / lms.median) / lms.s : ((value / lms.median) ** lms.l - 1) / (lms.l * lms.s);
-  const percentile = Math.max(0, Math.min(100, normalCdf(z) * 100));
-  return `P${Math.round(percentile)}`;
+  if (lms) {
+    const z = lms.l === 0 ? Math.log(value / lms.median) / lms.s : ((value / lms.median) ** lms.l - 1) / (lms.l * lms.s);
+    const percentile = Math.max(0, Math.min(100, normalCdf(z) * 100));
+    return `P${Math.round(percentile)}`;
+  }
+  return percentileFromReferenceData(data, ageMonths, value);
+}
+
+function referenceLineKeys(kind) {
+  if (state.settings.growthReferenceSource === "uheft_book") {
+    return kind === "bmi"
+      ? [["p3", "P3"], ["p50", "P50"], ["p90", "P90"]]
+      : [["p3", "P3"], ["p50", "P50"], ["p97", "P97"]];
+  }
+  return [["p5", "P5"], ["p50", "P50"], ["p95", "P95"]];
+}
+
+function percentileFromReferenceData(data, ageMonths, value) {
+  const row = growthRowAt(data, ageMonths);
+  if (!row || !Number.isFinite(value)) return "";
+  const points = Object.entries(row)
+    .map(([key, rowValue]) => {
+      const match = key.match(/^p(\d+)$/);
+      return match && Number.isFinite(Number(rowValue)) ? { percentile: Number(match[1]), value: Number(rowValue) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.percentile - b.percentile);
+  if (!points.length) return "";
+  if (value < points[0].value) return `P<${points[0].percentile}`;
+  if (value > points.at(-1).value) return `P>${points.at(-1).percentile}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const lower = points[index - 1];
+    const upper = points[index];
+    if (value <= upper.value) {
+      const range = upper.value - lower.value || 1;
+      const ratio = (value - lower.value) / range;
+      return `P${Math.round(lower.percentile + (upper.percentile - lower.percentile) * ratio)}`;
+    }
+  }
+  return "";
+}
+
+function growthRowAt(data, ageMonths) {
+  if (!data.length || ageMonths < data[0].m || ageMonths > data.at(-1).m) return null;
+  const lower = data.reduce((best, row) => row.m <= ageMonths ? row : best, data[0]);
+  const upper = data.find((row) => row.m >= ageMonths) || data.at(-1);
+  if (upper.m === lower.m) return lower;
+  const ratio = (ageMonths - lower.m) / (upper.m - lower.m);
+  const keys = new Set([...Object.keys(lower), ...Object.keys(upper)]);
+  return Object.fromEntries([...keys].map((key) => {
+    if (key === "m") return [key, ageMonths];
+    if (!Number.isFinite(Number(lower[key])) || !Number.isFinite(Number(upper[key]))) return [key, undefined];
+    return [key, lower[key] + (upper[key] - lower[key]) * ratio];
+  }));
 }
 
 function growthReferenceData(kind) {
@@ -2646,11 +2728,13 @@ function growthReferenceData(kind) {
   const datasets = {
     who: window.WHO_GROWTH,
     german: window.GERMAN_GROWTH,
+    uheft_book: window.UHEFT_BOOK_GROWTH,
   };
   return { sex, source, data: datasets[source]?.[sex]?.[kind] };
 }
 
 function referenceShortLabel() {
+  if (state.settings.growthReferenceSource === "uheft_book") return "U-Heft";
   return state.settings.growthReferenceSource === "german" ? "U-Heft" : "WHO";
 }
 
@@ -2658,6 +2742,7 @@ function growthValueAt(data, ageMonths, key) {
   if (!data.length || ageMonths < data[0].m || ageMonths > data.at(-1).m) return null;
   const lower = data.reduce((best, row) => row.m <= ageMonths ? row : best, data[0]);
   const upper = data.find((row) => row.m >= ageMonths) || data.at(-1);
+  if (!Number.isFinite(Number(lower[key])) || !Number.isFinite(Number(upper[key]))) return null;
   if (upper.m === lower.m) return lower[key];
   const ratio = (ageMonths - lower.m) / (upper.m - lower.m);
   return lower[key] + (upper[key] - lower[key]) * ratio;
@@ -2665,17 +2750,18 @@ function growthValueAt(data, ageMonths, key) {
 
 function growthLmsAt(data, ageMonths) {
   if (!data.length || ageMonths < data[0].m || ageMonths > data.at(-1).m) return null;
-  return {
+  const lms = {
     l: growthValueAt(data, ageMonths, "l"),
     median: growthValueAt(data, ageMonths, "median"),
     s: growthValueAt(data, ageMonths, "s"),
   };
+  return Object.values(lms).every((value) => value !== null && value !== undefined && Number.isFinite(Number(value))) ? lms : null;
 }
 
 function ageMonthsAt(date) {
   const birth = new Date(state.child.birthDate);
   const days = Math.max(0, (startOfDay(date) - startOfDay(birth)) / (24 * 60 * 60 * 1000));
-  return Math.max(0, Math.min(24, days / 30.4375));
+  return Math.max(0, days / 30.4375);
 }
 
 function ageMonthsSinceBirth(date) {
