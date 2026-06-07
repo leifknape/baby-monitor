@@ -151,7 +151,7 @@ function defaultState() {
 function defaultChildSettings() {
   return {
     defaultMilk: "Pre",
-    growthReferenceSource: "who",
+    growthReferenceSource: "uheft_book",
     growthReferenceSex: "none",
     correctedAgeEnabled: false,
     dueDate: "",
@@ -2551,7 +2551,8 @@ function lineChart(title, entries, unit, options = {}) {
     }).join(" "),
   }));
   const latestPercentile = percentileForEntry(entries.at(-1), options.referenceKind);
-  const latestLabel = [formatValue(entries.at(-1)), latestPercentile ? `${referenceShortLabel()} ${latestPercentile}` : ""].filter(Boolean).join(" · ");
+  const latestReference = growthReferenceDataForEntry(entries.at(-1), options.referenceKind);
+  const latestLabel = [formatValue(entries.at(-1)), latestPercentile ? `${referenceShortLabel(latestReference?.source)} ${latestPercentile}` : ""].filter(Boolean).join(" · ");
   return `
     <div class="chart-title"><span>${title}</span><span>${escapeHtml(latestLabel)}</span></div>
     <div class="chart-frame">
@@ -2644,10 +2645,10 @@ function chartPointValue(entry, unit) {
 }
 
 function referenceSeries(kind, minTime, maxTime) {
-  const { sex, data } = growthReferenceData(kind);
+  const { sex, source, data } = growthReferenceDataForRange(kind, minTime, maxTime);
   if (!data || sex === "none" || !["weight", "head", "length", "bmi"].includes(kind)) return [];
   const count = 18;
-  const keys = referenceLineKeys(kind);
+  const keys = referenceLineKeys(kind, source);
   return keys.map(([key, label]) => ({
     key,
     label,
@@ -2661,7 +2662,7 @@ function referenceSeries(kind, minTime, maxTime) {
 }
 
 function percentileForEntry(entry, kind) {
-  const { sex, data } = growthReferenceData(kind);
+  const { sex, data } = growthReferenceDataForEntry(entry, kind);
   if (!entry || !data || sex === "none" || !["weight", "head", "length", "bmi"].includes(kind)) return "";
   const ageMonths = ageMonthsAt(new Date(entry.timestamp));
   const lms = growthLmsAt(data, ageMonths);
@@ -2674,8 +2675,8 @@ function percentileForEntry(entry, kind) {
   return percentileFromReferenceData(data, ageMonths, value);
 }
 
-function referenceLineKeys(kind) {
-  if (state.settings.growthReferenceSource === "uheft_book") {
+function referenceLineKeys(kind, source = state.settings.growthReferenceSource) {
+  if (source === "uheft_book") {
     return kind === "bmi"
       ? [["p3", "P3"], ["p50", "P50"], ["p90", "P90"]]
       : [["p3", "P3"], ["p50", "P50"], ["p97", "P97"]];
@@ -2733,9 +2734,44 @@ function growthReferenceData(kind) {
   return { sex, source, data: datasets[source]?.[sex]?.[kind] };
 }
 
-function referenceShortLabel() {
-  if (state.settings.growthReferenceSource === "uheft_book") return "U-Heft";
-  return state.settings.growthReferenceSource === "german" ? "U-Heft" : "WHO";
+function growthReferenceDataForRange(kind, minTime, maxTime) {
+  const direct = growthReferenceData(kind);
+  if (direct.source === "german" && !referenceCoversRange(direct.data, minTime, maxTime)) {
+    const fallback = extendedUHeftReferenceData(kind, direct.sex);
+    if (referenceCoversRange(fallback.data, minTime, maxTime)) return fallback;
+  }
+  return direct;
+}
+
+function growthReferenceDataForEntry(entry, kind) {
+  const direct = growthReferenceData(kind);
+  if (!entry) return direct;
+  const timestamp = new Date(entry.timestamp).getTime();
+  if (direct.source === "german" && !referenceCoversRange(direct.data, timestamp, timestamp)) {
+    const fallback = extendedUHeftReferenceData(kind, direct.sex);
+    if (referenceCoversRange(fallback.data, timestamp, timestamp)) return fallback;
+  }
+  return direct;
+}
+
+function extendedUHeftReferenceData(kind, sex) {
+  return {
+    sex,
+    source: "uheft_book",
+    data: window.UHEFT_BOOK_GROWTH?.[sex]?.[kind],
+  };
+}
+
+function referenceCoversRange(data, minTime, maxTime) {
+  if (!data?.length) return false;
+  const minAge = ageMonthsAt(new Date(minTime));
+  const maxAge = ageMonthsAt(new Date(maxTime));
+  return minAge >= data[0].m && maxAge <= data.at(-1).m;
+}
+
+function referenceShortLabel(source = state.settings.growthReferenceSource) {
+  if (source === "uheft_book") return "U-Heft";
+  return source === "german" ? "U-Heft" : "WHO";
 }
 
 function growthValueAt(data, ageMonths, key) {
