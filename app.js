@@ -733,6 +733,7 @@ function renderAnalytics() {
     renderDiaperCharts(),
     renderGrowthCharts(),
     renderVitalCharts(),
+    renderEchoCharts(),
     renderMilestoneAchievements(),
     renderDevelopmentProfile(),
   ].filter(Boolean);
@@ -994,6 +995,69 @@ function renderVitalCharts() {
     cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>${averageMeasurementLabel(heartRate, "bpm")}</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}${heartRateReferencePanel(heartRate.at(-1))}</article>`);
   }
   return cards.join("");
+}
+
+function renderEchoCharts() {
+  const findings = echoFindings();
+  if (!findings.length) return "";
+  const vmax = echoNumericSeries(findings, "vmax", "m/s");
+  const gradient = echoNumericSeries(findings, "gradient", "mmHg");
+  const insufficiencies = findings.filter((entry) => entry.data?.insufficiency && entry.data.insufficiency !== "nicht angegeben");
+  const charts = [
+    vmax.length >= 2 ? lineChart("Vmax", vmax, "m/s", { showPointLabels: true, showTimeAxis: true }) : "",
+    gradient.length >= 2 ? lineChart("Druckgradient", gradient, "mmHg", { showPointLabels: true, showTimeAxis: true }) : "",
+    insufficiencies.length ? echoInsufficiencyTimeline(insufficiencies) : "",
+  ].filter(Boolean);
+  if (!charts.length) return "";
+  const latestEcho = findings.at(-1);
+  const subtitle = [
+    latestEcho?.data?.place,
+    latestEcho?.data?.vmax !== undefined ? `Vmax ${Number(latestEcho.data.vmax).toLocaleString("de-DE", { maximumFractionDigits: 2 })} m/s` : "",
+    latestEcho?.data?.gradient !== undefined ? `${Number(latestEcho.data.gradient).toLocaleString("de-DE", { maximumFractionDigits: 1 })} mmHg` : "",
+  ].filter(Boolean).join(" · ");
+  return `
+    <article class="chart-card">
+      <div class="chart-title stacked">
+        <span>Echo-Werte</span>
+        <small>${escapeHtml(subtitle || "Nur dokumentierte Echo-Werte")}</small>
+      </div>
+      ${charts.join("")}
+    </article>
+  `;
+}
+
+function echoFindings() {
+  return activeEntries()
+    .filter((entry) => entry.type === "medical_finding" && entry.data?.findingType === "Echo")
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+
+function echoNumericSeries(findings, key, unit) {
+  return findings
+    .filter((entry) => Number.isFinite(Number(entry.data?.[key])))
+    .map((entry) => ({
+      id: `${entry.id}-${key}`,
+      childId: entry.childId,
+      type: "measurement",
+      timestamp: entry.timestamp,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+      value: Number(entry.data[key]),
+      unit,
+      data: { kind: `echo_${key}`, sourceId: entry.id },
+      notes: entry.data?.assessment || entry.notes,
+    }));
+}
+
+function echoInsufficiencyTimeline(findings) {
+  return `
+    <div class="detail-stack echo-values">
+      <strong>Pulmonalklappen-Undichtigkeit</strong>
+      ${findings.map((entry) => `
+        <span>${escapeHtml(shortDateText(entry.timestamp))}: ${escapeHtml(entry.data.insufficiency)}</span>
+      `).join("")}
+    </div>
+  `;
 }
 
 function averageMeasurementLabel(entries, unit) {
