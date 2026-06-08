@@ -521,6 +521,11 @@ function renderDashboard() {
 }
 
 function dashboardMeasurementCards() {
+  const cards = [];
+  if (ageMonthsSinceBirth(new Date()) >= 24) {
+    const bmi = latest(bmiMeasurements());
+    if (bmi) cards.push(statCard("Letzter BMI", formatValue(bmi), dateTimeText(bmi.timestamp), "chart"));
+  }
   return [
     ["length", "Letzte Körperlänge", "ruler"],
     ["head", "Letzter Kopfumfang", "circle"],
@@ -531,7 +536,7 @@ function dashboardMeasurementCards() {
     const entry = latest(measurements(kind));
     if (!entry) return "";
     return statCard(label, formatValue(entry), dateTimeText(entry.timestamp), iconName);
-  }).filter(Boolean);
+  }).filter(Boolean).reduce((items, card) => [...items, card], cards);
 }
 
 function renderEmptyDashboard() {
@@ -910,7 +915,7 @@ function renderGrowthCharts() {
     ["head", "Kopfumfang", "cm"],
     ["length", "Körperlänge", "cm"],
   ];
-  if (growthReferenceData("bmi").data) kinds.push(["bmi", "BMI", "kg/m²"]);
+  if (ageMonthsSinceBirth(new Date()) >= 24) kinds.push(["bmi", "BMI", "kg/m²"]);
   const charts = kinds.map(([kind, title, unit]) => {
     const values = kind === "bmi" ? bmiMeasurements() : measurements(kind);
     if (values.length < 2) return "";
@@ -933,15 +938,23 @@ function renderFeedingCharts() {
   const minBottle = Math.min(...feedings.map((entry) => Number(entry.value)));
   const avg = Math.round(sum(feedings.map((entry) => Number(entry.value))) / feedings.length);
   const currentWeight = latest(measurements("weight"));
-  const mlKg = currentWeight ? ` · ca. ${Math.round((byDay.at(-1)?.value || 0) / (currentWeight.value / 1000))} ml/kg/Tag` : "";
+  const previousDays = withoutToday(byDay);
+  const avgDailyMl = previousDays.length ? Math.round(sum(previousDays.map((item) => item.value)) / previousDays.length) : null;
+  const mlKg = currentWeight && avgDailyMl ? ` · ca. ${Math.round(avgDailyMl / (currentWeight.value / 1000))} ml/kg/Tag` : "";
   return `<article class="chart-card"><div class="chart-title"><span>Trinken</span><span>Ø ${avg} ml · ${minBottle}-${maxBottle} ml${mlKg}</span></div>${barChart(byDay, "ml")}</article>`;
 }
 
 function renderDiaperCharts() {
   const diapers = activeEntries().filter((entry) => entry.type === "diaper");
   if (!diapers.length) return "";
-  const byDay = dailyCounts(diapers, (items) => items.length);
-  return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>Einträge pro Tag</span></div>${barChart(byDay, "")}</article>`;
+  const byDay = dailyCounts(diapers, (items) => ({
+    value: items.length,
+    detail: `${items.filter((entry) => entry.data?.wet).length} nass · ${items.filter((entry) => entry.data?.stool).length} Stuhl`,
+  }));
+  const previousDays = withoutToday(byDay);
+  const avgDiapers = previousDays.length ? Number((sum(previousDays.map((item) => item.value)) / previousDays.length).toFixed(1)) : null;
+  const subtitle = avgDiapers ? `Ø ${avgDiapers.toLocaleString("de-DE")} Windeln/Tag` : "Einträge pro Tag";
+  return `<article class="chart-card"><div class="chart-title"><span>Windeln</span><span>${subtitle}</span></div>${barChart(byDay, "")}</article>`;
 }
 
 function renderMilestoneAchievements() {
@@ -1791,7 +1804,10 @@ function exportSeparateCsvs() {
     "notes.csv": (entry) => entry.type === "note",
   };
   const headers = ["id", "childId", "timestamp", "type", "value", "unit", "data", "notes", "createdAt", "updatedAt"];
-  Object.entries(groups).forEach(([filename, predicate]) => downloadCsv(filename, toCsv(activeEntries().filter(predicate), headers)));
+  const files = Object.fromEntries(
+    Object.entries(groups).map(([filename, predicate]) => [filename, toCsv(activeEntries().filter(predicate), headers)])
+  );
+  downloadZip("baby-monitor-separate-csvs.zip", files);
 }
 
 function exportDoctorSummary() {
@@ -1873,8 +1889,16 @@ function downloadCsv(filename, content) {
   downloadText(filename, content, "text/csv;charset=utf-8");
 }
 
+function downloadZip(filename, files) {
+  const blob = new Blob([buildZip(files)], { type: "application/zip" });
+  downloadBlob(filename, blob);
+}
+
 function downloadText(filename, content, type = "text/plain;charset=utf-8") {
-  const blob = new Blob([content], { type });
+  downloadBlob(filename, new Blob([content], { type }));
+}
+
+function downloadBlob(filename, blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -1883,6 +1907,96 @@ function downloadText(filename, content, type = "text/plain;charset=utf-8") {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function buildZip(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  Object.entries(files).forEach(([filename, content]) => {
+    const nameBytes = encoder.encode(filename);
+    const data = encoder.encode(content);
+    const crc = crc32(data);
+    const localHeader = concatBytes(
+      uint32(0x04034b50),
+      uint16(20),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(crc),
+      uint32(data.length),
+      uint32(data.length),
+      uint16(nameBytes.length),
+      uint16(0),
+      nameBytes
+    );
+    localParts.push(localHeader, data);
+    centralParts.push(concatBytes(
+      uint32(0x02014b50),
+      uint16(20),
+      uint16(20),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(crc),
+      uint32(data.length),
+      uint32(data.length),
+      uint16(nameBytes.length),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint16(0),
+      uint32(0),
+      uint32(offset),
+      nameBytes
+    ));
+    offset += localHeader.length + data.length;
+  });
+  const centralDirectory = concatBytes(...centralParts);
+  const end = concatBytes(
+    uint32(0x06054b50),
+    uint16(0),
+    uint16(0),
+    uint16(Object.keys(files).length),
+    uint16(Object.keys(files).length),
+    uint32(centralDirectory.length),
+    uint32(offset),
+    uint16(0)
+  );
+  return concatBytes(...localParts, centralDirectory, end);
+}
+
+function crc32(data) {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function uint16(value) {
+  return new Uint8Array([value & 255, (value >>> 8) & 255]);
+}
+
+function uint32(value) {
+  return new Uint8Array([value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255]);
+}
+
+function concatBytes(...parts) {
+  const total = parts.reduce((length, part) => length + part.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach((part) => {
+    result.set(part, offset);
+    offset += part.length;
+  });
+  return result;
 }
 
 async function importCsvFiles(files) {
@@ -2338,8 +2452,18 @@ function dailyCounts(entries, reducer) {
   });
   return [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, group]) => ({ label: group.label, value: reducer(group.entries) }))
+    .map(([key, group]) => {
+      const reduced = reducer(group.entries);
+      return typeof reduced === "object" && reduced !== null
+        ? { key, label: group.label, ...reduced }
+        : { key, label: group.label, value: reduced };
+    })
     .slice(-7);
+}
+
+function withoutToday(items) {
+  const todayKey = localDateKey(new Date());
+  return items.filter((item) => item.key !== todayKey);
 }
 
 function groupedEntriesByDay(entries) {
@@ -2506,10 +2630,10 @@ function barChart(items, unit) {
   const max = Math.max(...items.map((item) => item.value), 1);
   const displayItems = [...items].reverse();
   return `<div class="bars">${displayItems.map((item) => `
-    <div class="bar-row">
+    <div class="bar-row ${item.detail ? "with-detail" : ""}">
       <span>${escapeHtml(item.label)}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${Math.max(6, (item.value / max) * 100)}%"></div></div>
-      <span>${escapeHtml(String(item.value))}${unit ? ` ${unit}` : ""}</span>
+      <span>${escapeHtml(String(item.value))}${unit ? ` ${unit}` : ""}${item.detail ? `<small>${escapeHtml(item.detail)}</small>` : ""}</span>
     </div>
   `).join("")}</div>`;
 }
@@ -2823,21 +2947,21 @@ function heartRateReferencePanel(entry) {
   const reference = heartRateReferenceFor(entry);
   const contextLabel = reference.context === "sleep" ? "Schlaf" : "wach/ruhig";
   return `
-    <div class="reference-panel">
-      <strong>Puls-Orientierung</strong>
+    <details class="reference-panel">
+      <summary><strong>Puls-Orientierung</strong><span>${escapeHtml(reference.age)} · ${contextLabel}: ${reference.values[0]}-${reference.values[1]} bpm</span></summary>
       <span>${escapeHtml(reference.age)} · ${contextLabel}: ${reference.values[0]}-${reference.values[1]} bpm</span>
       <small>Orientierungsbereich nach HealthyChildren/AAP. Puls schwankt mit Schlaf, Wachzustand, Aktivität, Trinken und Unruhe.</small>
-    </div>
+    </details>
   `;
 }
 
 function spo2ReferencePanel() {
   return `
-    <div class="reference-panel">
-      <strong>SpO₂-Orientierung</strong>
+    <details class="reference-panel">
+      <summary><strong>SpO₂-Orientierung</strong><span>etwa 90-100 %</span></summary>
       <span>Weiter Orientierungsbereich: etwa 90-100 %</span>
       <small>Nur als Orientierung. Individuelle Zielbereiche, Messbedingungen, Höhe sowie bekannte Herz- oder Lungenthemen können davon abweichen.</small>
-    </div>
+    </details>
   `;
 }
 

@@ -347,13 +347,27 @@ button {
 }
 
 .reference-panel {
-  display: grid;
-  gap: 6px;
   margin-top: 10px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--surface-soft) 84%, transparent);
+}
+
+.reference-panel[open] {
+  display: grid;
+  gap: 6px;
+}
+
+.reference-panel summary {
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.reference-panel summary::-webkit-details-marker {
+  display: none;
 }
 
 .reference-panel strong {
@@ -1152,6 +1166,18 @@ button {
   gap: 8px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.bar-row.with-detail {
+  grid-template-columns: 72px 1fr minmax(96px, max-content);
+}
+
+.bar-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.15;
 }
 
 .bar-track {
