@@ -189,7 +189,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(15, 50, -6), 95, "ml", { completion: "teilweise", spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(8, 30, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(16, 10, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "weich" }),
-    entry("observation", at(18, 20, -6), undefined, undefined, { categories: ["Trinken: spuckt mehr"], duration: "kurz" }, "nach der Flasche etwas gespuckt"),
+    entry("observation", at(18, 20, -6), undefined, undefined, { categories: ["Trinken: spuckt mehr"] }, "nach der Flasche etwas gespuckt"),
     entry("measurement", at(9, 0, -6), 6140, "g", { kind: "weight" }),
     entry("measurement", at(9, 5, -6), 61.2, "cm", { kind: "length" }),
     entry("measurement", at(9, 8, -6), 39.4, "cm", { kind: "head" }),
@@ -214,7 +214,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(17, 35, -4), 110, "ml", { completion: "ja", spitUp: "wenig", milkType: "Pre" }),
     entry("diaper", at(7, 35, -4), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(14, 10, -4), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
-    entry("observation", at(16, 45, -4), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], duration: "ca. 30 Minuten" }, "abends unruhiger als sonst"),
+    entry("observation", at(16, 45, -4), undefined, undefined, { categories: ["Verhalten: sehr unruhig"] }, "abends unruhiger als sonst"),
     entry("medical_finding", at(9, 30, -4), undefined, undefined, { findingType: "Echo", place: "Kinderkardiologie", vmax: 2.1, gradient: 18, insufficiency: "gering", assessment: "Kontrolle dokumentiert, nächster Befund nach ärztlicher Absprache." }),
     entry("measurement", at(10, 0, -4), 6290, "g", { kind: "weight" }),
     entry("measurement", at(10, 5, -4), 61.5, "cm", { kind: "length" }),
@@ -239,7 +239,7 @@ function createDemoEntries(childId) {
     entry("milestone", at(11, 45, -2), undefined, undefined, { milestones: ["6 Monate: greift gezielter nach Dingen", "6 Monate: reagiert auf Ansprache"] }, "neue Fähigkeiten beobachtet"),
     entry("diaper", at(7, 55, -2), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(15, 45, -2), undefined, undefined, { wet: true, wetAmount: "viel", stool: false }),
-    entry("observation", at(13, 25, -2), undefined, undefined, { categories: ["Verhalten: ungewöhnlich schläfrig"], duration: "nach dem Trinken" }, "längerer Mittagsschlaf"),
+    entry("observation", at(13, 25, -2), undefined, undefined, { categories: ["Verhalten: ungewöhnlich schläfrig"] }, "längerer Mittagsschlaf"),
     entry("measurement", at(10, 0, -2), 6370, "g", { kind: "weight" }),
     entry("measurement", at(10, 4, -2), 61.8, "cm", { kind: "length" }),
     entry("measurement", at(10, 7, -2), 39.9, "cm", { kind: "head" }),
@@ -262,7 +262,7 @@ function createDemoEntries(childId) {
     entry("feeding", at(6, 10), 95, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }, "ruhig getrunken"),
     entry("diaper", at(7, 5), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }, "morgens"),
     entry("feeding", at(10, 20), 110, "ml", { completion: "teilweise", spitUp: "wenig", milkType: "Pre" }),
-    entry("observation", at(12, 15), undefined, undefined, { categories: ["Verhalten: sehr unruhig"], duration: "ca. 20 Minuten" }, "nach dem Mittagsschlaf wieder zufrieden"),
+    entry("observation", at(12, 15), undefined, undefined, { categories: ["Verhalten: sehr unruhig"] }, "nach dem Mittagsschlaf wieder zufrieden"),
     entry("diaper", at(13, 40), undefined, undefined, { wet: true, wetAmount: "viel", stool: true, stoolColor: "gelb", consistency: "weich" }),
     entry("feeding", at(15, 30), 120, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("measurement", at(17, 0), 6450, "g", { kind: "weight" }, "zu Hause gewogen"),
@@ -915,7 +915,7 @@ function renderGrowthCharts() {
     ["head", "Kopfumfang", "cm"],
     ["length", "Körperlänge", "cm"],
   ];
-  if (ageMonthsSinceBirth(new Date()) >= 24) kinds.push(["bmi", "BMI", "kg/m²"]);
+  if (ageMonthsSinceBirth(new Date()) >= 24) kinds.push(["bmi", "BMI", ""]);
   const charts = kinds.map(([kind, title, unit]) => {
     const values = kind === "bmi" ? bmiMeasurements() : measurements(kind);
     if (values.length < 2) return "";
@@ -985,15 +985,23 @@ function renderVitalCharts() {
   const spo2 = measurements("spo2");
   const heartRate = measurements("heart_rate");
   if (temperature.length >= 2) {
-    cards.push(`<article class="chart-card"><div class="chart-title"><span>Temperatur</span><span>Nur eintragen, wenn gemessen</span></div>${lineChart("Temperatur", temperature, "°C", { showPointLabels: true, showTimeAxis: true })}</article>`);
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Temperatur</span><span>${averageMeasurementLabel(temperature, "°C")}</span></div>${lineChart("Temperatur", temperature, "°C", { showPointLabels: true, showTimeAxis: true })}</article>`);
   }
   if (spo2.length >= 2) {
-    cards.push(`<article class="chart-card"><div class="chart-title"><span>Sauerstoffsättigung</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Sauerstoffsättigung", spo2, "%")}${spo2ReferencePanel()}</article>`);
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Sauerstoffsättigung</span><span>${averageMeasurementLabel(spo2, "%")}</span></div>${rangeChart("Sauerstoffsättigung", spo2, "%")}${spo2ReferencePanel()}</article>`);
   }
   if (heartRate.length >= 2) {
-    cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>Niedrigster und höchster Wert</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}${heartRateReferencePanel(heartRate.at(-1))}</article>`);
+    cards.push(`<article class="chart-card"><div class="chart-title"><span>Herzfrequenz</span><span>${averageMeasurementLabel(heartRate, "bpm")}</span></div>${rangeChart("Herzfrequenz", heartRate, "bpm")}${heartRateReferencePanel(heartRate.at(-1))}</article>`);
   }
   return cards.join("");
+}
+
+function averageMeasurementLabel(entries, unit) {
+  const values = entries.map((entry) => Number(entry.value)).filter(Number.isFinite);
+  if (!values.length) return "Niedrigster und höchster Wert";
+  const average = sum(values) / values.length;
+  const digits = unit === "°C" ? 1 : 0;
+  return `Ø ${average.toLocaleString("de-DE", { maximumFractionDigits: digits })} ${unit}`;
 }
 
 function renderSettings() {
@@ -1132,7 +1140,7 @@ function renderFormFields(choice, entry) {
     return `${base}
       <div class="field"><label for="amount">Menge in ml <span>Optional</span></label><input id="amount" name="value" type="range" min="0" max="300" step="10" value="${entry?.value || 0}" data-range="amount-number" /><input id="amount-number" type="number" inputmode="numeric" min="0" max="300" step="10" value="${entry?.value || ""}" placeholder="Nur eintragen, wenn gemessen" /></div>
       ${radioGroup("completion", "Vollständig getrunken", ["ja", "nein", "teilweise"], data.completion)}
-      ${radioGroup("spitUp", "Spucken danach", ["nein", "wenig", "mittel", "viel", "schwallartig"], data.spitUp || "nein")}
+      ${radioGroup("spitUp", "Spucken danach", ["nein", "wenig", "mittel", "viel"], data.spitUp === "schwallartig" ? "viel" : (data.spitUp || "nein"))}
       <div class="field"><label for="milkType">Milchtyp</label><input id="milkType" name="milkType" value="${escapeAttr(data.milkType || state.settings.defaultMilk || "Pre")}" /></div>
       ${notesField(notes)}`;
   }
@@ -1143,7 +1151,10 @@ function renderFormFields(choice, entry) {
       ${radioGroup("wetAmount", "Menge nass", ["wenig", "normal", "viel"], data.wetAmount)}
       ${radioGroup("stool", "Stuhl", ["ja", "nein"], data.stool ? "ja" : "nein")}
       <div class="field-row">
+        ${selectField("stoolAmount", "Menge Stuhl Optional", ["", "wenig", "normal", "viel"], data.stoolAmount)}
         ${selectField("stoolColor", "Stuhlfarbe Optional", ["", "gelb", "grün", "braun", "schwarz", "rot", "weißlich-hell"], data.stoolColor)}
+      </div>
+      <div class="field-row">
         ${selectField("consistency", "Konsistenz Optional", ["", "flüssig", "weich", "normal", "fest"], data.consistency)}
       </div>
       ${notesField(notes)}`;
@@ -1156,7 +1167,6 @@ function renderFormFields(choice, entry) {
   if (choice.id === "observation") {
     return `${base}
       ${renderObservationCategories(data.categories || [], data.categoryNotes || {})}
-      <div class="field"><label for="duration">Dauer <span>Optional</span></label><input id="duration" name="duration" value="${escapeAttr(data.duration || "")}" /></div>
       <div class="field"><label for="photo">Foto <span>Optional</span></label><input id="photo" name="photo" type="file" accept="image/*" /></div>
       ${notesField(notes)}`;
   }
@@ -1178,8 +1188,6 @@ function renderFormFields(choice, entry) {
         <div class="field"><label for="dose">Dosis <span>Optional</span></label><input id="dose" name="dose" value="${escapeAttr(data.dose || "")}" /></div>
         <div class="field"><label for="unit">Einheit <span>Optional</span></label><input id="unit" name="unit" value="${escapeAttr(data.unit || "")}" /></div>
       </div>
-      ${radioGroup("given", "Gegeben", ["ja", "nein"], data.given === false ? "nein" : "ja")}
-      ${checkGroup("flags", "Optional", ["wiederkehrend speichern", "Erinnerung"], data.flags || [])}
       ${notesField(notes)}`;
   }
 
@@ -1560,6 +1568,7 @@ function dataForChoice(choice, formData) {
     data.wet = formData.get("wet") === "ja";
     data.wetAmount = formData.get("wetAmount") || undefined;
     data.stool = formData.get("stool") === "ja";
+    data.stoolAmount = cleanString(formData.get("stoolAmount"));
     data.stoolColor = cleanString(formData.get("stoolColor"));
     data.consistency = cleanString(formData.get("consistency"));
   }
@@ -1573,7 +1582,6 @@ function dataForChoice(choice, formData) {
   if (choice.id === "observation") {
     data.categories = formData.getAll("categories");
     data.categoryNotes = categoryNotesFromForm(formData);
-    data.duration = cleanString(formData.get("duration"));
   }
   if (choice.id === "milestone") {
     data.milestones = formData.getAll("milestones");
@@ -1584,8 +1592,6 @@ function dataForChoice(choice, formData) {
     data.name = cleanString(formData.get("medName"));
     data.dose = cleanString(formData.get("dose"));
     data.unit = cleanString(formData.get("unit"));
-    data.given = formData.get("given") !== "nein";
-    data.flags = formData.getAll("flags");
   }
   if (choice.id === "medical_finding") {
     data.place = cleanString(formData.get("place"));
@@ -2200,7 +2206,7 @@ function bmiMeasurements() {
         createdAt: weight.createdAt,
         updatedAt: weight.updatedAt,
         value: Math.round(value * 10) / 10,
-        unit: "kg/m²",
+        unit: "",
         data: { kind: "bmi", weightId: weight.id, lengthId: length.id },
       };
     })
@@ -2948,7 +2954,7 @@ function heartRateReferencePanel(entry) {
   const contextLabel = reference.context === "sleep" ? "Schlaf" : "wach/ruhig";
   return `
     <details class="reference-panel">
-      <summary><strong>Puls-Orientierung</strong><span>${escapeHtml(reference.age)} · ${contextLabel}: ${reference.values[0]}-${reference.values[1]} bpm</span></summary>
+      <summary><strong>Puls-Orientierung</strong></summary>
       <span>${escapeHtml(reference.age)} · ${contextLabel}: ${reference.values[0]}-${reference.values[1]} bpm</span>
       <small>Orientierungsbereich nach HealthyChildren/AAP. Puls schwankt mit Schlaf, Wachzustand, Aktivität, Trinken und Unruhe.</small>
     </details>
@@ -2958,7 +2964,7 @@ function heartRateReferencePanel(entry) {
 function spo2ReferencePanel() {
   return `
     <details class="reference-panel">
-      <summary><strong>SpO₂-Orientierung</strong><span>etwa 90-100 %</span></summary>
+      <summary><strong>SpO2-Orientierung</strong></summary>
       <span>Weiter Orientierungsbereich: etwa 90-100 %</span>
       <small>Nur als Orientierung. Individuelle Zielbereiche, Messbedingungen, Höhe sowie bekannte Herz- oder Lungenthemen können davon abweichen.</small>
     </details>
@@ -2981,11 +2987,11 @@ function entryTitle(entry) {
 
 function detailForEntry(entry) {
   if (entry.type === "feeding") return [formatValue(entry), entry.data?.milkType, entry.data?.completion].filter(Boolean).join(" · ") || "Trinken";
-  if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
+  if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolAmount, entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
   if (entry.type === "observation") return observationDetail(entry);
   if (entry.type === "milestone") return [milestoneText(entry), entry.data?.status, entry.data?.situation, entry.data?.attachment ? "Foto" : "", firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
-  if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit, entry.data?.given === false ? "nicht gegeben" : "gegeben"].filter(Boolean).join(" · ") || "Medikament";
+  if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
   return [firstLine(entry.notes || "Freie Notiz"), entry.data?.attachment ? "Anhang" : ""].filter(Boolean).join(" · ");
 }
@@ -2998,7 +3004,6 @@ function observationDetail(entry) {
   return [
     categoriesText(entry),
     categoryNotesText(entry),
-    entry.data?.duration,
     entry.notes,
   ].filter(Boolean).join(" · ") || "Beobachtung";
 }
@@ -3023,6 +3028,9 @@ function choiceForEntry(entry) {
 }
 
 function formatValue(entry) {
+  if (entry.data?.kind === "bmi") {
+    return Number(entry.value).toLocaleString("de-DE", { maximumFractionDigits: 1 });
+  }
   if (["spo2", "heart_rate"].includes(entry.data?.kind) && (entry.data?.min !== undefined || entry.data?.max !== undefined)) {
     const min = entry.data?.min ?? entry.value;
     const max = entry.data?.max ?? entry.value;
