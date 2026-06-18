@@ -186,7 +186,7 @@ function createDemoEntries(childId) {
   return [
     entry("feeding", at(6, 20, -6), 90, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(11, 10, -6), 105, "ml", { completion: "ja", spitUp: "wenig", milkType: "Pre" }),
-    entry("feeding", at(15, 50, -6), 95, "ml", { completion: "teilweise", spitUp: "nein", milkType: "Pre" }),
+    entry("feeding", at(15, 50, -6), 95, "ml", { completion: "teilweise", offeredAmount: 120, remainingAmount: 25, spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(8, 30, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(16, 10, -6), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "weich" }),
     entry("observation", at(18, 20, -6), undefined, undefined, { categories: ["Trinken: spuckt mehr"] }, "nach der Flasche etwas gespuckt"),
@@ -223,7 +223,7 @@ function createDemoEntries(childId) {
 
     entry("feeding", at(6, 15, -3), 110, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(10, 50, -3), 120, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
-    entry("feeding", at(15, 40, -3), 115, "ml", { completion: "teilweise", spitUp: "wenig", milkType: "Pre" }),
+    entry("feeding", at(15, 40, -3), 115, "ml", { completion: "teilweise", offeredAmount: 130, remainingAmount: 15, spitUp: "wenig", milkType: "Pre" }),
     entry("feeding", at(20, 20, -3), 100, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(8, 5, -3), undefined, undefined, { wet: true, wetAmount: "viel", stool: false }),
     entry("diaper", at(13, 0, -3), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "normal" }),
@@ -247,7 +247,7 @@ function createDemoEntries(childId) {
 
     entry("feeding", at(6, 50, -1), 120, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("feeding", at(11, 30, -1), 125, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
-    entry("feeding", at(16, 15, -1), 110, "ml", { completion: "teilweise", spitUp: "wenig", milkType: "Pre" }),
+    entry("feeding", at(16, 15, -1), 110, "ml", { completion: "teilweise", offeredAmount: 130, remainingAmount: 20, spitUp: "wenig", milkType: "Pre" }),
     entry("feeding", at(21, 0, -1), 115, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
     entry("diaper", at(9, 10, -1), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }),
     entry("diaper", at(18, 45, -1), undefined, undefined, { wet: true, wetAmount: "normal", stool: true, stoolColor: "gelb", consistency: "weich" }),
@@ -261,7 +261,7 @@ function createDemoEntries(childId) {
 
     entry("feeding", at(6, 10), 95, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }, "ruhig getrunken"),
     entry("diaper", at(7, 5), undefined, undefined, { wet: true, wetAmount: "normal", stool: false }, "morgens"),
-    entry("feeding", at(10, 20), 110, "ml", { completion: "teilweise", spitUp: "wenig", milkType: "Pre" }),
+    entry("feeding", at(10, 20), 110, "ml", { completion: "teilweise", offeredAmount: 130, remainingAmount: 20, spitUp: "wenig", milkType: "Pre" }),
     entry("observation", at(12, 15), undefined, undefined, { categories: ["Verhalten: sehr unruhig"] }, "nach dem Mittagsschlaf wieder zufrieden"),
     entry("diaper", at(13, 40), undefined, undefined, { wet: true, wetAmount: "viel", stool: true, stoolColor: "gelb", consistency: "weich" }),
     entry("feeding", at(15, 30), 120, "ml", { completion: "ja", spitUp: "nein", milkType: "Pre" }),
@@ -1201,9 +1201,17 @@ function renderFormFields(choice, entry) {
   const base = `<div class="field"><label for="timestamp">Zeitstempel</label><input id="timestamp" name="timestamp" type="datetime-local" value="${timestamp}" required /></div>`;
 
   if (choice.id === "feeding") {
+    const remainingAmount = optionalNumber(data.remainingAmount) ?? 0;
+    const offeredAmount = optionalNumber(data.offeredAmount) ?? (entry?.value !== undefined ? Number(entry.value) + remainingAmount : 0);
+    const partial = data.completion === "teilweise";
     return `${base}
-      <div class="field"><label for="amount">Menge in ml <span>Optional</span></label><input id="amount" name="value" type="range" min="0" max="300" step="10" value="${entry?.value || 0}" data-range="amount-number" /><input id="amount-number" type="number" inputmode="numeric" min="0" max="300" step="10" value="${entry?.value || ""}" placeholder="Nur eintragen, wenn gemessen" /></div>
+      <div class="field"><label for="amount">Menge der Flasche in ml <span>Optional</span></label><input id="amount" name="value" type="range" min="0" max="300" step="10" value="${offeredAmount}" data-range="amount-number" /><input id="amount-number" type="number" inputmode="numeric" min="0" max="300" step="10" value="${offeredAmount || ""}" placeholder="Nur eintragen, wenn gemessen" /></div>
       ${radioGroup("completion", "Vollständig getrunken", ["ja", "nein", "teilweise"], data.completion)}
+      <div class="field" data-feeding-remainder ${partial ? "" : "hidden"}>
+        <label for="remaining-amount">Übrig geblieben in ml <span>Optional</span></label>
+        <input id="remaining-amount" name="remainingAmount" type="range" min="0" max="${offeredAmount || 0}" step="10" value="${remainingAmount}" data-range="remaining-amount-number" />
+        <input id="remaining-amount-number" type="number" inputmode="numeric" min="0" max="${offeredAmount || 0}" step="10" value="${remainingAmount || ""}" placeholder="Restmenge" />
+      </div>
       ${radioGroup("spitUp", "Spucken danach", ["nein", "wenig", "mittel", "viel"], data.spitUp === "schwallartig" ? "viel" : (data.spitUp || "nein"))}
       <div class="field"><label for="milkType">Milchtyp</label><input id="milkType" name="milkType" value="${escapeAttr(data.milkType || state.settings.defaultMilk || "Pre")}" /></div>
       ${notesField(notes)}`;
@@ -1486,6 +1494,36 @@ function bindEvents() {
       range.value = number.value || 0;
     });
   });
+  const feedingRemainder = document.querySelector("[data-feeding-remainder]");
+  const feedingCompletionInputs = [...document.querySelectorAll('input[name="completion"]')];
+  if (feedingRemainder && feedingCompletionInputs.length) {
+    const amountRange = document.getElementById("amount");
+    const amountNumber = document.getElementById("amount-number");
+    const remainingRange = document.getElementById("remaining-amount");
+    const remainingNumber = document.getElementById("remaining-amount-number");
+    const syncRemainingLimit = () => {
+      const maximum = Math.max(0, Number(amountRange?.value || 0));
+      if (remainingRange) remainingRange.max = String(maximum);
+      if (remainingNumber) remainingNumber.max = String(maximum);
+      if (remainingRange && Number(remainingRange.value) > maximum) remainingRange.value = String(maximum);
+      if (remainingNumber && Number(remainingNumber.value) > maximum) remainingNumber.value = maximum ? String(maximum) : "";
+    };
+    const syncRemainderVisibility = () => {
+      const completion = document.querySelector('input[name="completion"]:checked')?.value;
+      feedingRemainder.hidden = completion !== "teilweise";
+    };
+    feedingCompletionInputs.forEach((input) => input.addEventListener("change", syncRemainderVisibility));
+    amountRange?.addEventListener("input", syncRemainingLimit);
+    amountNumber?.addEventListener("input", syncRemainingLimit);
+    remainingRange?.addEventListener("input", () => {
+      if (remainingNumber) remainingNumber.value = remainingRange.value === "0" ? "" : remainingRange.value;
+    });
+    remainingNumber?.addEventListener("input", () => {
+      if (remainingRange) remainingRange.value = remainingNumber.value || 0;
+    });
+    syncRemainingLimit();
+    syncRemainderVisibility();
+  }
   const findingType = document.getElementById("findingType");
   if (findingType) {
     findingType.addEventListener("change", () => {
@@ -1591,6 +1629,7 @@ async function saveEntry(choiceId, formData) {
 }
 
 function entryValueForChoice(choice, formData) {
+  if (choice.id === "feeding") return feedingAmounts(formData).consumed;
   if (["spo2", "heart_rate"].includes(choice.id)) {
     const min = optionalNumber(formData.get("valueMin"));
     const max = optionalNumber(formData.get("valueMax"));
@@ -1598,6 +1637,17 @@ function entryValueForChoice(choice, formData) {
     return min ?? max;
   }
   return optionalNumber(formData.get("value"));
+}
+
+function feedingAmounts(formData) {
+  const offered = optionalNumber(formData.get("value"));
+  const completion = formData.get("completion") || undefined;
+  if (offered === undefined) return { offered, remaining: undefined, consumed: undefined };
+  if (completion === "nein") return { offered, remaining: undefined, consumed: 0 };
+  if (completion !== "teilweise") return { offered, remaining: undefined, consumed: offered };
+  const requestedRemaining = optionalNumber(formData.get("remainingAmount")) ?? 0;
+  const remaining = Math.min(offered, Math.max(0, requestedRemaining));
+  return { offered, remaining, consumed: Math.max(0, offered - remaining) };
 }
 
 function attachmentFrom(formData) {
@@ -1624,9 +1674,12 @@ function dataForChoice(choice, formData) {
   const data = {};
   if (choice.kind) data.kind = choice.kind;
   if (choice.id === "feeding") {
+    const amounts = feedingAmounts(formData);
     data.completion = formData.get("completion") || undefined;
     data.spitUp = formData.get("spitUp") || undefined;
     data.milkType = cleanString(formData.get("milkType"));
+    if (amounts.offered !== undefined) data.offeredAmount = amounts.offered;
+    if (data.completion === "teilweise" && amounts.remaining !== undefined) data.remainingAmount = amounts.remaining;
   }
   if (choice.id === "diaper") {
     data.wet = formData.get("wet") === "ja";
@@ -3050,7 +3103,7 @@ function entryTitle(entry) {
 }
 
 function detailForEntry(entry) {
-  if (entry.type === "feeding") return [formatValue(entry), entry.data?.milkType, entry.data?.completion].filter(Boolean).join(" · ") || "Trinken";
+  if (entry.type === "feeding") return feedingDetail(entry);
   if (entry.type === "diaper") return [entry.data?.wet ? "nass" : "", entry.data?.stool ? "Stuhl" : "", entry.data?.stoolAmount, entry.data?.stoolColor].filter(Boolean).join(" · ") || "Windel";
   if (entry.type === "measurement") return [formatValue(entry), entry.data?.situation].filter(Boolean).join(" · ");
   if (entry.type === "observation") return observationDetail(entry);
@@ -3058,6 +3111,21 @@ function detailForEntry(entry) {
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit].filter(Boolean).join(" · ") || "Medikament";
   if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
   return [firstLine(entry.notes || "Freie Notiz"), entry.data?.attachment ? "Anhang" : ""].filter(Boolean).join(" · ");
+}
+
+function feedingDetail(entry) {
+  const completion = entry.data?.completion;
+  const remaining = optionalNumber(entry.data?.remainingAmount);
+  const offered = optionalNumber(entry.data?.offeredAmount)
+    ?? (Number.isFinite(Number(entry.value)) ? Number(entry.value) + (remaining || 0) : undefined);
+  const milkType = entry.data?.milkType;
+  if (completion === "nein") {
+    return ["nicht getrunken", offered !== undefined ? `${offered} ml angeboten` : "", milkType].filter(Boolean).join(" · ");
+  }
+  if (completion === "teilweise") {
+    return [`${formatValue(entry)} getrunken`, offered !== undefined ? `${offered} ml angeboten` : "", remaining !== undefined ? `${remaining} ml übrig` : "", milkType].filter(Boolean).join(" · ");
+  }
+  return [formatValue(entry), milkType, completion].filter(Boolean).join(" · ") || "Trinken";
 }
 
 function categoriesText(entry) {
