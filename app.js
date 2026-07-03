@@ -1331,6 +1331,14 @@ function renderFindingSpecificFields(findingType, data) {
       <div class="field"><label for="vmax">Vmax m/s <span>Optional</span></label><input id="vmax" name="vmax" type="number" step="0.01" value="${data.vmax || ""}" /></div>
       <div class="field"><label for="gradient">Druckgradient mmHg <span>Optional</span></label><input id="gradient" name="gradient" type="number" step="0.1" value="${data.gradient || ""}" /></div>
     </div>
+    <div class="field-row">
+      <div class="field"><label for="echoHeartRate">Puls bei der Messung <span>Optional</span></label><input id="echoHeartRate" name="echoHeartRate" type="number" step="1" value="${data.heartRate || ""}" placeholder="bpm" /></div>
+      <div class="field"><label for="echoHeartRateMin">Puls niedrigster Wert <span>Optional</span></label><input id="echoHeartRateMin" name="echoHeartRateMin" type="number" step="1" value="${data.heartRateMin || ""}" placeholder="bpm" /></div>
+    </div>
+    <div class="field">
+      <label for="echoHeartRateMax">Puls höchster Wert <span>Optional</span></label>
+      <input id="echoHeartRateMax" name="echoHeartRateMax" type="number" step="1" value="${data.heartRateMax || ""}" placeholder="bpm" />
+    </div>
     ${selectField("insufficiency", "Pulmonalklappen-Undichtigkeit Optional", ["", "keine", "gering", "mittel", "hochgradig", "nicht angegeben"], data.insufficiency)}
   `;
   if (findingType === "Echo") return `${echoFields}${assessment}${nextControl}`;
@@ -1715,6 +1723,9 @@ function dataForChoice(choice, formData) {
     data.findingType = cleanString(formData.get("findingType"));
     data.vmax = optionalNumber(formData.get("vmax"));
     data.gradient = optionalNumber(formData.get("gradient"));
+    data.heartRate = optionalNumber(formData.get("echoHeartRate"));
+    data.heartRateMin = optionalNumber(formData.get("echoHeartRateMin"));
+    data.heartRateMax = optionalNumber(formData.get("echoHeartRateMax"));
     data.insufficiency = cleanString(formData.get("insufficiency"));
     data.assessment = cleanString(formData.get("assessment"));
     data.nextControl = formData.get("nextControl") ? new Date(formData.get("nextControl")).toISOString() : undefined;
@@ -2500,6 +2511,7 @@ function findingSummary(entry) {
       entry.data?.findingType ? `Art: ${entry.data.findingType}` : "",
       entry.data?.vmax !== undefined ? `Vmax: ${entry.data.vmax} m/s` : "",
       entry.data?.gradient !== undefined ? `Druckgradient: ${entry.data.gradient} mmHg` : "",
+      echoHeartRateLabel(entry.data),
       entry.data?.insufficiency ? `Undichtigkeit: ${entry.data.insufficiency}` : "",
       entry.data?.assessment ? `Einschätzung: ${entry.data.assessment}` : "",
       entry.notes ? `Notiz: ${entry.notes}` : "",
@@ -2539,6 +2551,7 @@ function renderFindingDetails(entry) {
     entry.data?.findingType ? `Art: ${entry.data.findingType}` : "",
     entry.data?.vmax !== undefined ? `Vmax: ${entry.data.vmax} m/s` : "",
     entry.data?.gradient !== undefined ? `Druckgradient: ${entry.data.gradient} mmHg` : "",
+    echoHeartRateLabel(entry.data),
     entry.data?.insufficiency ? `Undichtigkeit: ${entry.data.insufficiency}` : "",
     entry.data?.assessment ? `Einschätzung: ${entry.data.assessment}` : "",
     entry.notes ? `Notiz: ${entry.notes}` : "",
@@ -2782,7 +2795,7 @@ function lineChart(title, entries, unit, options = {}) {
   const xForTime = (timestamp, index = 0) => entries.length > 2 || timeRange > 1
     ? xStart + ((timestamp - minTime) / timeRange) * (xEnd - xStart)
     : xStart + (index / (entries.length - 1)) * (xEnd - xStart);
-  const yForValue = (value) => 126 - ((value - yMin) / range) * 86;
+  const yForValue = (value) => 118 - ((value - yMin) / range) * 80;
   const points = entries.map((entry, index) => {
     const x = xForTime(new Date(entry.timestamp).getTime(), index);
     const y = yForValue(Number(entry.value));
@@ -2809,8 +2822,8 @@ function lineChart(title, entries, unit, options = {}) {
         ${referencePaths.map((line) => `<text class="reference-label" x="${(xEnd - 2).toFixed(1)}" y="${yForValue(line.points.at(-1).value).toFixed(1)}" text-anchor="end">${line.label}</text>`).join("")}
         <path d="${path}"></path>
         ${points.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4"></circle>`).join("")}
-        ${options.showPointLabels ? points.map(([x, y, entry, index]) => `<text class="point-label" x="${x.toFixed(1)}" y="${Math.max(16, y - 10).toFixed(1)}" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(chartPointValue(entry, unit))}</text>`).join("") : ""}
-        ${options.showTimeAxis ? points.map(([x, , entry, index]) => `<text class="axis-label" x="${x.toFixed(1)}" y="164" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(shortDateText(entry.timestamp))}</text>`).join("") : ""}
+        ${options.showPointLabels ? chartValueLabels(points, unit) : ""}
+        ${options.showTimeAxis ? chartAxisLabels(points) : ""}
         ${options.showTimeAxis ? "" : `<text class="unit-label" x="${xStart}" y="176">${escapeHtml(unit)}</text>`}
       </svg>
     </div>
@@ -2867,10 +2880,10 @@ function rangeChart(title, entries, unit) {
         <path class="range-line low" d="${lowPath}"></path>
         ${points.map((point) => `<circle class="range-point high" cx="${point.x.toFixed(1)}" cy="${point.yHigh.toFixed(1)}" r="3.5"></circle><circle class="range-point low" cx="${point.x.toFixed(1)}" cy="${point.yLow.toFixed(1)}" r="3.5"></circle>`).join("")}
         ${points.map((point) => `
-          <text class="point-label" x="${point.x.toFixed(1)}" y="${Math.max(14, point.yHigh - 10).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.high, unit))}</text>
-          <text class="point-label" x="${point.x.toFixed(1)}" y="${Math.min(136, point.yLow + 16).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.low, unit))}</text>
+          <text class="point-label ${point.index % 2 ? "below" : "above"}" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, true).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.high, unit))}</text>
+          <text class="point-label ${point.index % 2 ? "above" : "below"}" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, false).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.low, unit))}</text>
         `).join("")}
-        ${points.map((point) => `<text class="axis-label" x="${point.x.toFixed(1)}" y="164" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(shortDateText(point.entry.timestamp))}</text>`).join("")}
+        ${chartAxisLabels(points.map((point) => [point.x, 0, point.entry, point.index]))}
       </svg>
     </div>
   `;
@@ -2878,6 +2891,45 @@ function rangeChart(title, entries, unit) {
 
 function rangePointLabel(value, unit) {
   return `${Number(value).toLocaleString("de-DE", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+function chartValueLabels(points, unit) {
+  const minSpacing = 22;
+  let lastAboveX = -Infinity;
+  let lastBelowX = -Infinity;
+  return points.map(([x, y, entry, index]) => {
+    const preferBelow = index % 2 === 1;
+    const canUsePreferred = preferBelow ? x - lastBelowX >= minSpacing : x - lastAboveX >= minSpacing;
+    const below = canUsePreferred ? preferBelow : !preferBelow;
+    if (below) lastBelowX = x;
+    else lastAboveX = x;
+    const labelY = below ? Math.min(132, y + 18) : Math.max(14, y - 12);
+    return `<text class="point-label ${below ? "below" : "above"}" x="${x.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${edgeAnchor(index, points.length)}">${escapeHtml(chartPointValue(entry, unit))}</text>`;
+  }).join("");
+}
+
+function chartAxisLabels(points) {
+  const minSpacing = 24;
+  let lastX = -Infinity;
+  let lastLabel = "";
+  return points.map(([x, , entry], index) => {
+    const label = shortDateText(entry.timestamp);
+    const isEdge = index === 0 || index === points.length - 1;
+    if (!isEdge && (label === lastLabel || x - lastX < minSpacing)) return "";
+    lastX = x;
+    lastLabel = label;
+    return `
+      <text class="axis-label vertical" x="${x.toFixed(1)}" y="158" text-anchor="end" transform="rotate(-62 ${x.toFixed(1)} 158)">
+        ${escapeHtml(label)}
+      </text>
+    `;
+  }).join("");
+}
+
+function rangeLabelY(point, high) {
+  const base = high ? point.yHigh : point.yLow;
+  const above = high ? point.index % 2 === 0 : point.index % 2 === 1;
+  return above ? Math.max(14, base - 12) : Math.min(132, base + 18);
 }
 
 function edgeAnchor(index, count) {
@@ -3109,8 +3161,19 @@ function detailForEntry(entry) {
   if (entry.type === "observation") return observationDetail(entry);
   if (entry.type === "milestone") return [milestoneText(entry), entry.data?.status, entry.data?.situation, entry.data?.attachment ? "Foto" : "", firstLine(entry.notes || "")].filter(Boolean).join(" · ") || "Meilenstein";
   if (entry.type === "medication") return [entry.data?.name, entry.data?.dose, entry.data?.unit].filter(Boolean).join(" · ") || "Medikament";
-  if (entry.type === "medical_finding") return [entry.data?.place, entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
+  if (entry.type === "medical_finding") return [entry.data?.place, echoHeartRateLabel(entry.data), entry.data?.assessment || entry.notes].filter(Boolean).map(firstLine).join(" · ") || "Arztbefund";
   return [firstLine(entry.notes || "Freie Notiz"), entry.data?.attachment ? "Anhang" : ""].filter(Boolean).join(" · ");
+}
+
+function echoHeartRateLabel(data = {}) {
+  const min = optionalNumber(data.heartRateMin);
+  const max = optionalNumber(data.heartRateMax);
+  const single = optionalNumber(data.heartRate);
+  if (min !== undefined && max !== undefined) return `Puls: ${Math.min(min, max)}-${Math.max(min, max)} bpm`;
+  if (min !== undefined) return `Puls ab ${min} bpm`;
+  if (max !== undefined) return `Puls bis ${max} bpm`;
+  if (single !== undefined) return `Puls: ${single} bpm`;
+  return "";
 }
 
 function feedingDetail(entry) {

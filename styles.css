@@ -1207,6 +1207,36 @@ button {
   overflow: visible;
 }
 
+.line-chart .point-label,
+.line-chart .axis-label,
+.line-chart .reference-label,
+.line-chart .unit-label {
+  font-size: 12px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.line-chart .point-label {
+  fill: var(--text);
+}
+
+.line-chart .axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.line-chart .axis-label.vertical {
+  dominant-baseline: central;
+}
+
+.line-chart .reference-label,
+.line-chart .unit-label {
+  fill: var(--muted);
+}
+
 .line-chart path {
   fill: none;
   stroke: var(--accent);
@@ -1354,6 +1384,12 @@ button:disabled {
 
   .app-shell {
     padding-top: 28px;
+  }
+}
+
+@media (min-width: 760px) and (orientation: landscape) {
+  .app-shell {
+    width: min(90vw, 980px);
   }
 }
 
