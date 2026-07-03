@@ -2774,6 +2774,13 @@ function barChart(items, unit) {
   `).join("")}</div>`;
 }
 
+function chartSvgWidth() {
+  const viewportWidth = typeof window === "undefined" ? 420 : window.innerWidth;
+  if (viewportWidth < 760) return 420;
+  const shellWidth = Math.min(viewportWidth * 0.9, 980);
+  return Math.max(420, Math.round(shellWidth - 56));
+}
+
 function lineChart(title, entries, unit, options = {}) {
   if (entries.length < 2) return `<div class="empty">Noch nicht genug Werte für einen Verlauf.</div>`;
   const values = entries.map((entry) => Number(entry.value));
@@ -2789,7 +2796,7 @@ function lineChart(title, entries, unit, options = {}) {
   const yMin = min - padding;
   const yMax = max + padding;
   const range = yMax - yMin || 1;
-  const width = 420;
+  const width = chartSvgWidth();
   const xStart = 12;
   const xEnd = width - 12;
   const xForTime = (timestamp, index = 0) => entries.length > 2 || timeRange > 1
@@ -2854,7 +2861,7 @@ function rangeChart(title, entries, unit) {
   const yMin = min - padding;
   const yMax = max + padding;
   const range = yMax - yMin || 1;
-  const width = 420;
+  const width = chartSvgWidth();
   const xStart = 12;
   const xEnd = width - 12;
   const xForTime = (timestamp, index = 0) => ranges.length > 2 || timeRange > 1
@@ -3382,6 +3389,16 @@ function icon(name) {
 }
 
 render();
+
+let resizeRenderTimer;
+window.addEventListener("resize", () => {
+  window.clearTimeout(resizeRenderTimer);
+  resizeRenderTimer = window.setTimeout(render, 120);
+});
+window.addEventListener("orientationchange", () => {
+  window.clearTimeout(resizeRenderTimer);
+  resizeRenderTimer = window.setTimeout(render, 180);
+});
 
 if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
   window.addEventListener("load", () => {
