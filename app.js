@@ -1200,7 +1200,8 @@ function renderFormFields(choice, entry) {
 
   if (choice.id === "feeding") {
     const remainingAmount = optionalNumber(data.remainingAmount) ?? 0;
-    const offeredAmount = optionalNumber(data.offeredAmount) ?? (entry?.value !== undefined ? Number(entry.value) + remainingAmount : 0);
+    const consumedAmount = optionalNumber(data.consumedAmount);
+    const offeredAmount = optionalNumber(data.offeredAmount) ?? (consumedAmount !== undefined ? consumedAmount + remainingAmount : (entry?.value !== undefined ? Number(entry.value) + remainingAmount + spitUpDeduction(data.spitUp) : 0));
     const partial = data.completion === "teilweise";
     return `${base}
       <div class="field"><label for="amount">Menge der Flasche in ml <span>Optional</span></label><input id="amount" name="value" type="range" min="0" max="300" step="10" value="${offeredAmount}" data-range="amount-number" /><input id="amount-number" type="number" inputmode="numeric" min="0" max="300" step="10" value="${offeredAmount || ""}" placeholder="Nur eintragen, wenn gemessen" /></div>
@@ -1635,7 +1636,7 @@ async function saveEntry(choiceId, formData) {
 }
 
 function entryValueForChoice(choice, formData) {
-  if (choice.id === "feeding") return feedingAmounts(formData).consumed;
+  if (choice.id === "feeding") return feedingAmounts(formData).retained;
   if (["spo2", "heart_rate"].includes(choice.id)) {
     const min = optionalNumber(formData.get("valueMin"));
     const max = optionalNumber(formData.get("valueMax"));
@@ -1648,12 +1649,22 @@ function entryValueForChoice(choice, formData) {
 function feedingAmounts(formData) {
   const offered = optionalNumber(formData.get("value"));
   const completion = formData.get("completion") || undefined;
-  if (offered === undefined) return { offered, remaining: undefined, consumed: undefined };
-  if (completion === "nein") return { offered, remaining: undefined, consumed: 0 };
-  if (completion !== "teilweise") return { offered, remaining: undefined, consumed: offered };
-  const requestedRemaining = optionalNumber(formData.get("remainingAmount")) ?? 0;
-  const remaining = Math.min(offered, Math.max(0, requestedRemaining));
-  return { offered, remaining, consumed: Math.max(0, offered - remaining) };
+  const spitUp = formData.get("spitUp") || "nein";
+  if (offered === undefined) return { offered, remaining: undefined, consumed: undefined, retained: undefined, spitUpAmount: 0 };
+  if (completion === "nein") return { offered, remaining: undefined, consumed: 0, retained: 0, spitUpAmount: 0 };
+  let remaining;
+  let consumed = offered;
+  if (completion === "teilweise") {
+    const requestedRemaining = optionalNumber(formData.get("remainingAmount")) ?? 0;
+    remaining = Math.min(offered, Math.max(0, requestedRemaining));
+    consumed = Math.max(0, offered - remaining);
+  }
+  const spitUpAmount = Math.min(consumed, spitUpDeduction(spitUp));
+  return { offered, remaining, consumed, retained: Math.max(0, consumed - spitUpAmount), spitUpAmount };
+}
+
+function spitUpDeduction(spitUp) {
+  return { wenig: 5, mittel: 10, viel: 20, schwallartig: 20 }[spitUp] || 0;
 }
 
 function attachmentFrom(formData) {
@@ -1685,6 +1696,8 @@ function dataForChoice(choice, formData) {
     data.spitUp = formData.get("spitUp") || undefined;
     data.milkType = cleanString(formData.get("milkType"));
     if (amounts.offered !== undefined) data.offeredAmount = amounts.offered;
+    if (amounts.consumed !== undefined) data.consumedAmount = amounts.consumed;
+    if (amounts.spitUpAmount) data.spitUpAmount = amounts.spitUpAmount;
     if (data.completion === "teilweise" && amounts.remaining !== undefined) data.remainingAmount = amounts.remaining;
   }
   if (choice.id === "diaper") {
@@ -3182,16 +3195,26 @@ function echoHeartRateLabel(data = {}) {
 function feedingDetail(entry) {
   const completion = entry.data?.completion;
   const remaining = optionalNumber(entry.data?.remainingAmount);
+  const consumed = optionalNumber(entry.data?.consumedAmount);
+  const retained = optionalNumber(entry.value);
+  const spitUpAmount = optionalNumber(entry.data?.spitUpAmount) ?? Math.min(consumed ?? retained ?? 0, spitUpDeduction(entry.data?.spitUp));
   const offered = optionalNumber(entry.data?.offeredAmount)
-    ?? (Number.isFinite(Number(entry.value)) ? Number(entry.value) + (remaining || 0) : undefined);
+    ?? (consumed !== undefined ? consumed + (remaining || 0) : (retained !== undefined ? retained + (remaining || 0) + spitUpAmount : undefined));
   const milkType = entry.data?.milkType;
   if (completion === "nein") {
     return ["nicht getrunken", offered !== undefined ? `${offered} ml angeboten` : "", milkType].filter(Boolean).join(" · ");
   }
-  if (completion === "teilweise") {
-    return [`${formatValue(entry)} getrunken`, offered !== undefined ? `${offered} ml angeboten` : "", remaining !== undefined ? `${remaining} ml übrig` : "", milkType].filter(Boolean).join(" · ");
+  const parts = [];
+  if (consumed !== undefined && spitUpAmount > 0) {
+    parts.push(`${consumed} ml getrunken`, `ca. ${retained ?? Math.max(0, consumed - spitUpAmount)} ml behalten`, `${spitUpAmount} ml gespuckt`);
+  } else {
+    parts.push(`${consumed ?? retained} ml getrunken`);
   }
-  return [formatValue(entry), milkType, completion].filter(Boolean).join(" · ") || "Trinken";
+  if (completion === "teilweise") {
+    parts.push(offered !== undefined ? `${offered} ml angeboten` : "", remaining !== undefined ? `${remaining} ml übrig` : "");
+  }
+  parts.push(milkType, completion && completion !== "teilweise" ? completion : "");
+  return parts.filter(Boolean).join(" · ") || "Trinken";
 }
 
 function categoriesText(entry) {
