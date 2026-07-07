@@ -1,4 +1,5 @@
 const STORAGE_KEY = "baby-monitor-state-v1";
+const APP_VERSION = "v50";
 const DEMO_VERSION = 5;
 
 const entryChoices = [
@@ -288,6 +289,7 @@ function loadState() {
       settings: { ...fallback.settings, ...(parsed.settings || {}) },
     });
     if (!parsed.settings?.explicitThemeChoice) next.settings.darkMode = true;
+    if (next.__needsPersistence) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     return next;
   } catch {
     return defaultState();
@@ -296,7 +298,8 @@ function loadState() {
 
 function prepareState(source) {
   const fallbackChild = source.child || defaultState().child;
-  const sourceEntries = Array.isArray(source.entries) ? source.entries : [];
+  const migration = migrateStoredEntries(Array.isArray(source.entries) ? source.entries : []);
+  const sourceEntries = migration.entries;
   const entriesForChildId = (childId) => sourceEntries.filter((entry) => entry.childId === childId);
   const hasEntriesForChildId = (childId) => entriesForChildId(childId).length > 0;
   const isRecoveredChild = (child) => /^Gespeichertes Kind/.test(child.name || "");
@@ -388,8 +391,32 @@ function prepareState(source) {
     },
   };
   syncActiveChild(prepared);
+  if (migration.changed) {
+    Object.defineProperty(prepared, "__needsPersistence", { value: true, enumerable: false });
+  }
   installSettingsBridge(prepared);
   return prepared;
+}
+
+function migrateStoredEntries(entries) {
+  let changed = false;
+  const migrated = entries.map((entry) => {
+    if (entry?.type !== "feeding" || entry.data?.consumedAmount !== undefined) return entry;
+    const spitUpAmount = spitUpDeduction(entry.data?.spitUp);
+    const consumed = optionalNumber(entry.value);
+    if (!spitUpAmount || consumed === undefined || consumed <= 0) return entry;
+    changed = true;
+    return {
+      ...entry,
+      value: Math.max(0, consumed - spitUpAmount),
+      data: {
+        ...(entry.data || {}),
+        consumedAmount: consumed,
+        spitUpAmount: Math.min(consumed, spitUpAmount),
+      },
+    };
+  });
+  return { entries: migrated, changed };
 }
 
 function installSettingsBridge(target) {
@@ -1097,6 +1124,7 @@ function renderSettings() {
       <div class="settings-card">
         <h3>App-Einstellungen</h3>
         <div class="segmented"><label><input type="checkbox" id="dark-mode" ${state.settings.darkMode ? "checked" : ""} /> Dark Mode</label></div>
+        <div class="detail-stack"><span>Installierte Version: ${APP_VERSION}</span></div>
         <button class="text-button" type="button" data-action="refresh-app">App aktualisieren</button>
         <button class="primary-button" type="button" data-action="save-settings">Speichern</button>
       </div>
