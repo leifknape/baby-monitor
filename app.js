@@ -618,7 +618,7 @@ function renderTimeline() {
 function renderEntryRow(entry) {
   return `
     <article class="entry-row" data-entry="${entry.id}">
-      <div class="entry-time">${timeText(entry.timestamp)}</div>
+      <div class="entry-time"><span>${timeText(entry.timestamp)}</span><small>${shortDateText(entry.timestamp)}</small></div>
       <div>
         <div class="entry-title">${entryTitle(entry)}</div>
         <div class="entry-detail">${escapeHtml(detailForEntry(entry))}</div>
@@ -935,14 +935,12 @@ function renderFeedingCharts() {
   const feedings = activeEntries().filter((entry) => entry.type === "feeding" && Number(entry.value) > 0);
   if (!feedings.length) return "";
   const byDay = dailyCounts(feedings, (items) => sum(items.map((entry) => Number(entry.value || 0))));
-  const maxBottle = Math.max(...feedings.map((entry) => Number(entry.value)));
-  const minBottle = Math.min(...feedings.map((entry) => Number(entry.value)));
   const avg = Math.round(sum(feedings.map((entry) => Number(entry.value))) / feedings.length);
   const currentWeight = latest(measurements("weight"));
   const previousDays = withoutToday(byDay);
   const avgDailyMl = previousDays.length ? Math.round(sum(previousDays.map((item) => item.value)) / previousDays.length) : null;
   const mlKg = currentWeight && avgDailyMl ? ` · ca. ${Math.round(avgDailyMl / (currentWeight.value / 1000))} ml/kg/Tag` : "";
-  return `<article class="chart-card"><div class="chart-title"><span>Trinken</span><span>Ø ${avg} ml · ${minBottle}-${maxBottle} ml${mlKg}</span></div>${barChart(byDay, "ml")}</article>`;
+  return `<article class="chart-card"><div class="chart-title"><span>Trinken</span><span>Ø ${avg} ml${mlKg}</span></div>${barChart(byDay, "ml")}</article>`;
 }
 
 function renderDiaperCharts() {
@@ -2887,8 +2885,8 @@ function rangeChart(title, entries, unit) {
         <path class="range-line low" d="${lowPath}"></path>
         ${points.map((point) => `<circle class="range-point high" cx="${point.x.toFixed(1)}" cy="${point.yHigh.toFixed(1)}" r="3.5"></circle><circle class="range-point low" cx="${point.x.toFixed(1)}" cy="${point.yLow.toFixed(1)}" r="3.5"></circle>`).join("")}
         ${points.map((point) => `
-          <text class="point-label ${point.index % 2 ? "below" : "above"}" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, true).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.high, unit))}</text>
-          <text class="point-label ${point.index % 2 ? "above" : "below"}" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, false).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.low, unit))}</text>
+          <text class="point-label above" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, true).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.high, unit))}</text>
+          <text class="point-label below" x="${point.x.toFixed(1)}" y="${rangeLabelY(point, false).toFixed(1)}" text-anchor="${edgeAnchor(point.index, points.length)}">${escapeHtml(rangePointLabel(point.low, unit))}</text>
         `).join("")}
         ${chartAxisLabels(points.map((point) => [point.x, 0, point.entry, point.index]))}
       </svg>
@@ -2934,9 +2932,7 @@ function chartAxisLabels(points) {
 }
 
 function rangeLabelY(point, high) {
-  const base = high ? point.yHigh : point.yLow;
-  const above = high ? point.index % 2 === 0 : point.index % 2 === 1;
-  return above ? Math.max(14, base - 12) : Math.min(132, base + 18);
+  return high ? Math.max(14, point.yHigh - 12) : Math.min(136, point.yLow + 18);
 }
 
 function edgeAnchor(index, count) {

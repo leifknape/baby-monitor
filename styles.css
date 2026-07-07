@@ -308,7 +308,7 @@ button {
 
 .entry-row {
   display: grid;
-  grid-template-columns: 54px 1fr auto;
+  grid-template-columns: 62px 1fr auto;
   align-items: center;
   min-height: 76px;
   padding: 10px 10px 10px 12px;
@@ -316,9 +316,17 @@ button {
 }
 
 .entry-time {
+  display: grid;
+  gap: 2px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.entry-time small {
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .entry-title {
