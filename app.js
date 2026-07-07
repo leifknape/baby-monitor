@@ -1,5 +1,5 @@
 const STORAGE_KEY = "baby-monitor-state-v1";
-const APP_VERSION = "v50";
+const APP_VERSION = "v51";
 const DEMO_VERSION = 5;
 
 const entryChoices = [
@@ -289,10 +289,18 @@ function loadState() {
       settings: { ...fallback.settings, ...(parsed.settings || {}) },
     });
     if (!parsed.settings?.explicitThemeChoice) next.settings.darkMode = true;
-    if (next.__needsPersistence) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    if (next.__needsPersistence) persistMigratedState(next);
     return next;
   } catch {
     return defaultState();
+  }
+}
+
+function persistMigratedState(next) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Keep the loaded in-memory data even if the browser cannot persist the migration immediately.
   }
 }
 
